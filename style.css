@@ -453,3 +453,8 @@ html[data-theme="dark"] .hero{background:linear-gradient(125deg,#143f36,#1a5146 
 .date-sep{color:var(--muted);font-size:13px;flex:none}
 .stats td:nth-child(2){white-space:nowrap}
 @media(max-width:719.5px){.danger-zone .btn{flex:1 1 100%}}
+
+/* v2.6.1 — dải bảo mật chuyển vào TRONG trang Tổng quan (Cruz: để ở
+   trang tổng quan thôi là đủ, đừng hiện mọi tab): bỏ căn lề kiểu chân
+   trang cũ, để nó thẳng hàng với các khối của Tổng quan */
+.danger-zone{margin:22px 0 4px;width:auto;max-width:none}

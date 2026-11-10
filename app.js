@@ -1254,7 +1254,11 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    sau nút "Bộ lọc" — nút hiện luôn trạng thái đang lọc; nút quản lý
    nhóm/thôn chuyển vào trong panel; (3) lọc ngày Thu chi xếp 1 hàng
    "từ … đến …"; danger-zone mobile mọi nút full hàng; cột Thôn trong
-   bảng thống kê nợ không xuống dòng giữa chữ. */
+   bảng thống kê nợ không xuống dòng giữa chữ.
+   v2.6.1 (Cruz: dải bảo mật "để ở trang tổng quan thôi đc r"): khối
+   Tài khoản & đồng bộ / Mã PIN / Xoá dữ liệu chuyển vào cuối trang
+   Tổng quan, không còn hiện ở mọi tab. Kèm bản HUONG-DAN-CO-HINH
+   (hướng dẫn có ảnh chụp màn hình) theo yêu cầu của Cruz. */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
