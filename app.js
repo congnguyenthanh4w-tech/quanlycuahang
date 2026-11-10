@@ -724,12 +724,11 @@ function showGate(){const g=gateEl('loginGate');if(g)g.classList.remove('hidden'
 function hideGate(){const g=gateEl('loginGate');if(g)g.classList.add('hidden');}
 function gateStatus(t){const s=gateEl('gateStatus');if(s)s.textContent=t||'';}
 function gateErrShow(m){const e=gateEl('gateErr');if(e)e.textContent=m||'';}
-function gateReady(){showGate();
+function gateReady(){showGate();_gateArmed=true;
   ['gateGoogle','gateEmail','gatePass','gateLogin','gateReg'].forEach(id=>{const el=gateEl(id);if(el)el.disabled=false;});
-  gateStatus('');if(_gateErr){gateErrShow(_gateErr);_gateErr='';}
-  const em=gateEl('gateEmail');if(em)setTimeout(()=>em.focus(),80);}
+  gateStatus('');if(_gateErr){gateErrShow(_gateErr);_gateErr='';}}
 function gateFatal(msg){showGate();gateStatus(msg);const r=gateEl('gateReload');if(r)r.classList.remove('hidden');}
-function gatePendingErr(msg){if(_authResolved&&!_sync.uid)gateErrShow(msg);else _gateErr=msg;}
+function gatePendingErr(msg){if(_gateArmed||(_authResolved&&!_sync.uid))gateErrShow(msg);else _gateErr=msg;}
 (function(){
   const ua=navigator.userAgent||'';
   if(/Zalo|FBAN|FBAV|FB_IAB|Messenger|Instagram|Line\//i.test(ua)){const w=gateEl('gateWebview');if(w)w.classList.remove('hidden');}
@@ -999,24 +998,31 @@ function updateSyncState(){
   document.querySelectorAll('.sync-state').forEach(el=>{el.textContent=txt;});
 }
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+function withTimeout(p,ms){return Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),ms))]);}
 function stateRef(){return firebase.firestore().doc('stores/'+_sync.storeId+'/state/main');}
-let _authResolved=false,_gateErr='';
+let _authResolved=false,_gateErr='',_gateArmed=false;
 async function initSync(){
   updateSyncState();
   if(!FB_CONFIG){gateFatal('Bản app này chưa bật đăng nhập bằng tài khoản.');return;}
-  const slowTimer=setTimeout(()=>{if(!_authResolved){gateStatus('Kết nối hơi chậm… hãy kiểm tra mạng, hoặc tải lại trang.');const r=document.getElementById('gateReload');if(r)r.classList.remove('hidden');}},15000);
+  const slowTimer=setTimeout(()=>{if(!_authResolved){gateStatus('Máy chủ đăng nhập phản hồi chậm — kiểm tra mạng, hoặc tải lại trang.');const r=document.getElementById('gateReload');if(r)r.classList.remove('hidden');}},20000);
   try{
     const base='https://www.gstatic.com/firebasejs/10.12.2/';
-    await loadScript(base+'firebase-app-compat.js');
-    await loadScript(base+'firebase-auth-compat.js');
-    await loadScript(base+'firebase-firestore-compat.js');
+    gateStatus('Đang tải phần đăng nhập…');
+    await withTimeout(loadScript(base+'firebase-app-compat.js'),20000);
+    await withTimeout(loadScript(base+'firebase-auth-compat.js'),20000);
+    await withTimeout(loadScript(base+'firebase-firestore-compat.js'),20000);
     firebase.initializeApp(FB_CONFIG);
-    try{await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);}catch(e){}
+    try{await withTimeout(firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL),6000);}catch(e){}
     _fbReady=true;
     /* Kết quả redirect Google: xử lý NỀN, tuyệt đối không await trước listener
        — getRedirectResult có thể treo vô hạn khi trình duyệt chặn iframe của
        authDomain (đã dính thật 2026-11-10: cổng kẹt ở "Đang kết nối…"). */
     firebase.auth().getRedirectResult().catch(e=>{gatePendingErr(AUTH_ERR[e.code]||('Đăng nhập Google chưa thành công — thử lại. ('+(e.code||'')+')'));});
+    /* Mở khoá form cổng NGAY khi SDK sẵn sàng — không chờ onAuthStateChanged
+       (listener có thể về rất chậm ở trình duyệt chặn cookie bên thứ ba;
+       chờ nó từng làm cổng kẹt disabled vô hạn). Listener về sau sẽ tự
+       ẩn cổng nếu đã có phiên đăng nhập. */
+    if(!_sync.uid)gateReady();
     firebase.auth().onAuthStateChanged(async user=>{
       _authResolved=true;clearTimeout(slowTimer);
       if(_unsubState){_unsubState();_unsubState=null;}
