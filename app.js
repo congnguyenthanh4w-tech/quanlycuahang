@@ -729,6 +729,7 @@ function gateReady(){showGate();
   gateStatus('');if(_gateErr){gateErrShow(_gateErr);_gateErr='';}
   const em=gateEl('gateEmail');if(em)setTimeout(()=>em.focus(),80);}
 function gateFatal(msg){showGate();gateStatus(msg);const r=gateEl('gateReload');if(r)r.classList.remove('hidden');}
+function gatePendingErr(msg){if(_authResolved&&!_sync.uid)gateErrShow(msg);else _gateErr=msg;}
 (function(){
   const ua=navigator.userAgent||'';
   if(/Zalo|FBAN|FBAV|FB_IAB|Messenger|Instagram|Line\//i.test(ua)){const w=gateEl('gateWebview');if(w)w.classList.remove('hidden');}
@@ -1011,9 +1012,11 @@ async function initSync(){
     await loadScript(base+'firebase-firestore-compat.js');
     firebase.initializeApp(FB_CONFIG);
     try{await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);}catch(e){}
-    try{await firebase.auth().getRedirectResult();}
-    catch(e){_gateErr=AUTH_ERR[e.code]||('Đăng nhập Google chưa thành công — thử lại. ('+(e.code||'')+')');}
     _fbReady=true;
+    /* Kết quả redirect Google: xử lý NỀN, tuyệt đối không await trước listener
+       — getRedirectResult có thể treo vô hạn khi trình duyệt chặn iframe của
+       authDomain (đã dính thật 2026-11-10: cổng kẹt ở "Đang kết nối…"). */
+    firebase.auth().getRedirectResult().catch(e=>{gatePendingErr(AUTH_ERR[e.code]||('Đăng nhập Google chưa thành công — thử lại. ('+(e.code||'')+')'));});
     firebase.auth().onAuthStateChanged(async user=>{
       _authResolved=true;clearTimeout(slowTimer);
       if(_unsubState){_unsubState();_unsubState=null;}
