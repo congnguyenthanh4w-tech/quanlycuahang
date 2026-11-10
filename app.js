@@ -295,7 +295,9 @@ function productForm(p,prefillBarcode){
         if(lp>0)p.priceHistory.push({date:todayISO(),kind:'Giá nhập',price:lp});
         firstLot=true;}
       DB.products.push(p);}
-    save();closeModal();renderAll();toast(firstLot?'Đã lưu sản phẩm + nhập lô đầu tiên.':'Đã lưu sản phẩm.');if(p.id)openProduct(p.id);
+    save();closeModal();renderAll();toast(firstLot?'Đã lưu sản phẩm + nhập lô đầu tiên.':'Đã lưu sản phẩm.');
+    /* v2.5.3: lưu xong ĐÓNG LUÔN — trước đây tự mở tiếp trang chi tiết nên
+       người dùng phải tắt thêm 1 lần nữa (Cruz phàn nàn 2026-11-10). */
   };
 }
 document.getElementById('btnAddProduct').onclick=()=>{const sv=document.getElementById('prodSearch').value.trim();productForm(null,/^\d{8,}$/.test(sv)?sv:'');};
@@ -353,6 +355,7 @@ function openProduct(id){
     '<div class="kv"><span>Mã / Barcode</span><b>'+esc(p.code||'—')+(p.barcode?' · '+esc(p.barcode):'')+'</b></div>'+
     '<div class="kv"><span>Nhóm / Đơn vị</span><b>'+esc(p.group||'')+' · '+esc(p.unit||'')+'</b></div>'+
     '<div class="kv"><span>Giá bán tham khảo</span><b>'+fmtMoney(p.sellPrice)+'</b></div>'+
+    '<div class="kv"><span>Trạng thái</span><b>'+(p.status==='stopped'?'Ngừng kinh doanh':'Đang kinh doanh')+'</b></div>'+
     '<div class="kv"><span>Tồn kho hiện tại</span><b>'+st+' '+esc(p.unit||'')+'</b></div>'+
     alerts.map(a=>'<span class="badge '+((a.kind==='expired'||a.kind==='out')?'red':'amber')+'">'+esc(a.label)+'</span> ').join('')+
     '<h3 class="sec-title">Các lô hàng ('+lots.length+')</h3>'+
@@ -361,11 +364,12 @@ function openProduct(id){
       '<div class="sub" style="color:var(--muted);font-size:13px">Số lượng: '+l.qty+' · Hạn dùng: '+(l.expiry?fmtDate(l.expiry)+(du!==null?' ('+(du<0?'đã hết hạn '+(-du)+' ngày':'còn '+du+' ngày')+')':''):'—')+'</div>'+
       '<div class="actions"><button class="btn btn-small" data-lotdec="'+l.id+'">− Bớt 1 (bán / huỷ)</button><button class="btn btn-small btn-danger" data-lotdel="'+l.id+'">Xoá lô</button></div></div>';}).join('')
       :'<div class="empty">Chưa có lô nhập nào.</div>')+
-    '<div class="actions"><button class="btn btn-primary" id="btnLot">＋ Nhập thêm lô</button><button class="btn" id="btnEditP">✏️ Sửa</button></div>'+
+    '<div class="actions"><button class="btn btn-primary" id="btnLot">＋ Nhập thêm lô</button><button class="btn" id="btnEditP">✏️ Sửa</button><button class="btn" id="btnStatusP">'+(p.status==='stopped'?'▶ Kinh doanh lại':'⏸ Ngừng kinh doanh')+'</button></div>'+
     '<h3 class="sec-title">Lịch sử thay đổi giá</h3>'+
     ((p.priceHistory&&p.priceHistory.length)?p.priceHistory.slice().reverse().map(h=>'<div class="kv"><span>'+fmtDate(h.date)+' · '+esc(h.kind)+'</span><b>'+fmtMoney(h.price)+'</b></div>').join(''):'<div class="sub" style="color:var(--muted)">Chưa có thay đổi giá.</div>')+
     '<div class="actions"><button class="btn btn-danger" id="btnDelP">🗑 Xoá sản phẩm</button></div>');
   document.getElementById('btnEditP').onclick=()=>productForm(p);
+  document.getElementById('btnStatusP').onclick=()=>{p.status=(p.status==='stopped')?'active':'stopped';save();renderAll();openProduct(id);toast(p.status==='stopped'?'Đã ngừng kinh doanh sản phẩm.':'Đã mở kinh doanh lại.');};
   document.getElementById('btnLot').onclick=()=>lotForm(p);
   document.getElementById('btnDelP').onclick=()=>{if(confirm('Xoá hẳn sản phẩm “'+p.name+'”?')){armUndo();DB.products=DB.products.filter(x=>x.id!==p.id);save();closeModal();renderAll();toastUndo('Đã xoá sản phẩm.');}};
   modalBox.querySelectorAll('[data-lotdec]').forEach(b=>b.onclick=()=>{const l=p.lots.find(x=>x.id===b.dataset.lotdec);if(l&&l.qty>0){l.qty--;save();openProduct(id);renderAll();}});
@@ -1156,7 +1160,11 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    v2.5.2: banner sao lưu hết báo động giả — chỉ hiện khi dữ liệu thật sự
    chưa an toàn (chưa đồng bộ server ≤7 ngày VÀ chưa sao lưu file ≤7 ngày);
    lastSyncAt đọc từ qlch_sync đã lưu, không đụng biến _sync (tránh lỗi
-   "truy cập trước khi khởi tạo" khi render chạy sớm/môi trường chặn SDK). */
+   "truy cập trước khi khởi tạo" khi render chạy sớm/môi trường chặn SDK).
+   v2.5.3 (Cruz tự test góp ý): lưu sản phẩm xong ĐÓNG popup luôn (trước tự
+   mở tiếp chi tiết phải tắt thêm lần nữa) + trạng thái ngừng kinh doanh
+   hiện rõ ở trang chi tiết kèm nút Ngừng/Kinh doanh lại 1 chạm (trước chỉ
+   có ô chọn khuất trong form Sửa nên tưởng chưa có). */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
