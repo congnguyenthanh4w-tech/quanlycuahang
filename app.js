@@ -419,9 +419,12 @@ function lookupBarcodeName(code){
   if('AbortController' in window){ctl=new AbortController();to=setTimeout(()=>ctl.abort(),4500);}
   fetch('https://world.openfoodfacts.org/api/v2/product/'+encodeURIComponent(code)+'?fields=product_name,product_name_vi,brands',ctl?{signal:ctl.signal}:undefined)
     .then(r=>r.json()).then(j=>{if(to)clearTimeout(to);
-      const pr=j&&j.product;if(!pr)return;
-      const nm=((pr.product_name_vi||pr.product_name||'')+'').trim();
-      if(!nm)return;
+      const pr=j&&j.product;
+      const nm=pr?((pr.product_name_vi||pr.product_name||'')+'').trim():'';
+      /* Không thấy trong kho chung: nói rõ lý do kẻo tưởng app hỏng —
+         mã vạch thường (EAN-13) chỉ chứa dãy số định danh, KHÔNG chứa
+         tên/giá/hạn dùng; tên do nơi bán tự lưu theo mã đó. */
+      if(!nm){toast('Mã vạch chỉ là dãy số nên hàng mới chưa có sẵn tên — tự đặt tên 1 lần này, lần sau quét là app nhận ngay.');return;}
       const cur=document.getElementById('pName');
       if(cur&&!cur.value.trim()){cur.value=nm;toast('Đã điền tên gợi ý từ mã vạch — kiểm tra lại nếu chưa đúng; giá bán tự nhập nhé.');}
     }).catch(()=>{if(to)clearTimeout(to);});
@@ -1139,7 +1142,9 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    sát đáy (hết badge Netlify) + sửa lệch ô Barcode trong form (nhãn 2 dòng
    vs 1 dòng) + QUÉT ĐIỀN NHANH: nút Quét ngay trong form sản phẩm, quét
    trúng mã đã có thì hỏi mở sản phẩm cũ (chặn tạo trùng cả khi lưu),
-   mã mới thì thử tra tên gợi ý từ Open Food Facts (giá vẫn nhập tay). */
+   mã mới thì thử tra tên gợi ý từ Open Food Facts (giá vẫn nhập tay).
+   Hotfix sau khi Cruz quét thử: tra không thấy tên thì hiện câu giải thích
+   "mã vạch chỉ là dãy số…" kẻo tưởng app hỏng (EAN-13 không chứa tên/giá/hạn). */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
