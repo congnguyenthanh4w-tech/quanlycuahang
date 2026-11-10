@@ -112,12 +112,17 @@ function openModal(html){modalBox.innerHTML='<button class="close-x" id="modalCl
   modalBox.querySelectorAll('input.mn').forEach(inp=>{
     if(inp.value){const v=num(inp.value);if(v)inp.value=v.toLocaleString('vi-VN');}
     inp.addEventListener('input',()=>{const raw=inp.value.replace(/[^\d]/g,'');inp.value=raw?Number(raw).toLocaleString('vi-VN'):'';});
-    /* v2.5.7: chip gợi ý nhập tiền nhanh dưới mọi ô tiền — bấm 1 cái điền
-       luôn số tiền, khỏi gõ nhiều số 0 (Cruz yêu cầu 2026-11-10). */
+    /* v2.5.8: gợi ý tiền THEO SỐ ĐANG GÕ kiểu app ngân hàng (Cruz yêu cầu):
+       gõ "5" -> gợi ý 5.000 / 50.000 / 500.000 / 5.000.000; ô đang trống
+       thì hiện các mức phổ biến. Bấm 1 gợi ý là điền luôn số tiền đó. */
     const mq=document.createElement('div');mq.className='mq-row';
-    mq.innerHTML=[10000,20000,50000,100000,500000,1000000].map(v=>'<button type="button" class="mq" data-v="'+v+'">'+v.toLocaleString('vi-VN')+'</button>').join('');
-    inp.insertAdjacentElement('afterend',mq);
-    mq.querySelectorAll('.mq').forEach(b=>b.onclick=()=>{inp.value=Number(b.dataset.v).toLocaleString('vi-VN');inp.dispatchEvent(new Event('input',{bubbles:true}));inp.focus();});});
+    const mqRender=()=>{const raw=inp.value.replace(/[^\d]/g,'');const v=raw?Number(raw):0;let list;
+      if(!v)list=[10000,20000,50000,100000,500000,1000000];
+      else{list=[];if(v>=1000)list.push(v);[1000,10000,100000,1000000].forEach(m=>{const x=v*m;if(x<=999999999999&&list.indexOf(x)<0)list.push(x);});list=list.slice(0,6);}
+      mq.innerHTML=list.map(x=>'<button type="button" class="mq" data-v="'+x+'">'+x.toLocaleString('vi-VN')+'</button>').join('');};
+    inp.insertAdjacentElement('afterend',mq);mqRender();
+    inp.addEventListener('input',mqRender);
+    mq.addEventListener('click',e=>{const b=e.target.closest('.mq');if(!b)return;inp.value=Number(b.dataset.v).toLocaleString('vi-VN');inp.dispatchEvent(new Event('input',{bubbles:true}));inp.focus();});});
   modalBox.querySelectorAll('input[type="file"]').forEach(inp=>{
     inp.classList.add('filepick-native');
     const isVideo=(inp.accept||'').indexOf('video')>=0;
@@ -1229,7 +1234,10 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    tiền nợ thành dòng riêng trong cột chữ + nút gom cột phải, tên/ghi chú
    1 dòng có ellipsis (WebKit từng co cột chữ dưới cả số ĐT -> chữ đè tiền);
    danger-zone mobile xếp nút gọn. THÊM chip gợi ý tiền nhanh (10k–1tr)
-   dưới mọi ô nhập tiền trong modal. */
+   dưới mọi ô nhập tiền trong modal.
+   v2.5.8 (Cruz: gợi ý tiền phải theo số đang gõ như app ngân hàng): gợi
+   ý tính động từ số đang nhập — gõ "5" -> 5.000/50.000/500.000/5.000.000;
+   ô trống hiện các mức phổ biến. Xong bản này là bàn giao được. */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
