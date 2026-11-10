@@ -253,6 +253,12 @@ function productForm(p){
     field('Trạng thái','<select id="pStatus"><option value="active"'+(p.status==='active'?' selected':'')+'>Đang kinh doanh</option><option value="stopped"'+(p.status==='stopped'?' selected':'')+'>Ngừng kinh doanh</option></select>')+'</div>'+
     '<div class="grid2">'+field('Ngưỡng cảnh báo tồn kho','<input id="pThreshold" type="number" min="0" value="'+esc(p.threshold)+'">')+
     field('Số ngày cảnh báo hết hạn','<input id="pWarn" type="number" min="0" value="'+esc(p.warnDays)+'">')+'</div>'+
+    (p.id?'':'<h3 class="sec-title">Lô nhập đầu tiên — không bắt buộc</h3>'+
+    '<p class="sub" style="color:var(--muted);font-size:13px;margin:-4px 0 10px">Đang có sẵn hàng thì nhập luôn số lượng ở đây — khỏi phải mở sản phẩm ra nhập lô riêng. Chưa nhập hàng thì cứ để trống.</p>'+
+    '<div class="grid2">'+field('Số lượng nhập','<input id="pLotQty" type="number" min="0" step="any" placeholder="Để trống nếu chưa nhập">')+
+    field('Giá nhập (theo đơn vị)','<input id="pLotPrice" class="mn" inputmode="numeric">')+'</div>'+
+    '<div class="grid2">'+field('Ngày nhập','<input id="pLotDate" type="date" value="'+todayISO()+'">')+
+    field('Hạn dùng của lô này','<input id="pLotExpiry" type="date">')+'</div>')+
     '<div class="actions"><button type="submit" class="btn btn-primary">Lưu sản phẩm</button></div></form>');
   taxSel('pGroup','group');taxSel('pUnit','unit');
   let imageData=p.image||'';
@@ -266,8 +272,15 @@ function productForm(p){
       unit:document.getElementById('pUnit').value||'Gói',sellPrice:sell,
       threshold:num(document.getElementById('pThreshold').value),warnDays:num(document.getElementById('pWarn').value),
       status:document.getElementById('pStatus').value,image:imageData});
-    if(!p.id){p.id=uid();DB.products.push(p);}
-    save();closeModal();renderAll();toast('Đã lưu sản phẩm.');if(p.id)openProduct(p.id);
+    let firstLot=false;
+    if(!p.id){p.id=uid();
+      const lq=num(document.getElementById('pLotQty').value);
+      if(lq>0){const lp=num(document.getElementById('pLotPrice').value);
+        p.lots.push({id:uid(),date:document.getElementById('pLotDate').value||todayISO(),qty:lq,importPrice:lp,expiry:document.getElementById('pLotExpiry').value});
+        if(lp>0)p.priceHistory.push({date:todayISO(),kind:'Giá nhập',price:lp});
+        firstLot=true;}
+      DB.products.push(p);}
+    save();closeModal();renderAll();toast(firstLot?'Đã lưu sản phẩm + nhập lô đầu tiên.':'Đã lưu sản phẩm.');if(p.id)openProduct(p.id);
   };
 }
 document.getElementById('btnAddProduct').onclick=()=>productForm(null);
@@ -444,17 +457,34 @@ document.getElementById('btnVillages').onclick=()=>{
   modalBox.querySelectorAll('[data-vdel]').forEach(b=>b.onclick=()=>{if(DB.customers.some(c=>c.villageId===b.dataset.vdel)){toast('Thôn này đang có khách — chuyển khách sang thôn khác trước.');return;}if(confirm('Xoá thôn này?')){DB.villages=DB.villages.filter(v=>v.id!==b.dataset.vdel);save();closeModal();renderAll();}});
 };
 function customerForm(c){
+  const isNew=!(c&&c.id);
   c=c||{name:'',villageId:(DB.villages[0]||{}).id||'',phone:'',note:''};
   openModal('<h2>'+(c.id?'Sửa khách hàng':'Thêm khách hàng')+'</h2><form id="fCust">'+
     field('Họ tên *','<input id="cName" required value="'+esc(c.name)+'">')+
     field('Thôn','<select id="cVillage">'+DB.villages.map(v=>'<option value="'+v.id+'"'+(c.villageId===v.id?' selected':'')+'>'+esc(v.name)+'</option>').join('')+'</select>')+
     field('Số điện thoại','<input id="cPhone" type="tel" value="'+esc(c.phone||'')+'">')+
     field('Địa chỉ hoặc ghi chú nhận diện','<textarea id="cNote" rows="2">'+esc(c.note||'')+'</textarea>')+
+    (isNew?'<h3 class="sec-title">Khoản nợ đầu tiên — không bắt buộc</h3>'+
+      '<p class="sub" style="color:var(--muted);font-size:13px;margin:-4px 0 10px">Khách mua nợ ngay thì điền tiền vào đây, app ghi luôn một lượt — khỏi phải mở hồ sơ ghi nợ riêng. Chưa nợ thì cứ để trống.</p>'+
+      field('Tổng tiền nợ','<input id="cDebtTotal" class="mn" inputmode="numeric" placeholder="Để trống nếu khách chưa nợ">')+
+      field('Nợ gì (ghi chú)','<input id="cDebtNote" placeholder="VD: 2 thùng bia + 1 bao gạo">')+
+      field('Ngày giờ phát sinh','<input id="cDebtWhen" type="datetime-local" value="'+nowLocal()+'">')+
+      field('Ảnh / video bằng chứng','<input id="cDebtEv" type="file" accept="image/*,video/*">')
+    :'')+
     '<div class="actions"><button class="btn btn-primary" type="submit">Lưu</button></div></form>');
+  let evData='',evName='';
+  if(isNew){const evInp=document.getElementById('cDebtEv');if(evInp)evInp.addEventListener('change',e=>fileToDataURL(e.target,(d,n)=>{evData=d||'';evName=n||'';}));}
   document.getElementById('fCust').onsubmit=e=>{e.preventDefault();
     Object.assign(c,{name:document.getElementById('cName').value.trim(),villageId:document.getElementById('cVillage').value,
       phone:document.getElementById('cPhone').value.trim(),note:document.getElementById('cNote').value.trim()});
-    if(!c.id){c.id=uid();DB.customers.push(c);} save();closeModal();renderAll();toast('Đã lưu khách hàng.');};
+    let firstDebt=false;
+    if(!c.id){c.id=uid();DB.customers.push(c);
+      if(isNew){const tot=num(document.getElementById('cDebtTotal').value);
+        if(tot>0){DB.debts.push({id:uid(),customerId:c.id,datetime:document.getElementById('cDebtWhen').value||nowLocal(),
+          note:document.getElementById('cDebtNote').value.trim(),total:tot,evidence:evData,evidenceName:evName,payments:[]});firstDebt=true;}}}
+    save();closeModal();renderAll();
+    if(firstDebt){toast('Đã lưu khách hàng + ghi khoản nợ đầu tiên.');openCustomer(c.id);}
+    else toast('Đã lưu khách hàng.');};
 }
 document.getElementById('btnAddCustomer').onclick=()=>customerForm(null);
 
