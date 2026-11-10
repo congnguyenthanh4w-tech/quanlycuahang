@@ -362,7 +362,7 @@ function openProduct(id){
     (lots.length?lots.map(l=>{const du=l.expiry?daysUntil(l.expiry):null;
       return '<div class="sub-block"><div class="head"><b>Lô nhập '+fmtDate(l.date)+'</b><span class="money">'+fmtMoney(l.importPrice)+'/'+esc(p.unit||'')+'</span></div>'+
       '<div class="sub" style="color:var(--muted);font-size:13px">Số lượng: '+l.qty+' · Hạn dùng: '+(l.expiry?fmtDate(l.expiry)+(du!==null?' ('+(du<0?'đã hết hạn '+(-du)+' ngày':'còn '+du+' ngày')+')':''):'—')+'</div>'+
-      '<div class="actions"><button class="btn btn-small" data-lotdec="'+l.id+'">− Bớt 1 (bán / huỷ)</button><button class="btn btn-small btn-danger" data-lotdel="'+l.id+'">Xoá lô</button></div></div>';}).join('')
+      '<div class="actions"><button class="btn btn-small" data-lotdec="'+l.id+'">− Bớt số lượng (bán / huỷ)</button><button class="btn btn-small btn-danger" data-lotdel="'+l.id+'">Xoá lô</button></div></div>';}).join('')
       :'<div class="empty">Chưa có lô nhập nào.</div>')+
     '<div class="actions"><button class="btn btn-primary" id="btnLot">＋ Nhập thêm lô</button><button class="btn" id="btnEditP">✏️ Sửa</button><button class="btn" id="btnStatusP">'+(p.status==='stopped'?'▶ Kinh doanh lại':'⏸ Ngừng kinh doanh')+'</button></div>'+
     '<h3 class="sec-title">Lịch sử thay đổi giá</h3>'+
@@ -372,7 +372,7 @@ function openProduct(id){
   document.getElementById('btnStatusP').onclick=()=>{p.status=(p.status==='stopped')?'active':'stopped';save();renderAll();openProduct(id);toast(p.status==='stopped'?'Đã ngừng kinh doanh sản phẩm.':'Đã mở kinh doanh lại.');};
   document.getElementById('btnLot').onclick=()=>lotForm(p);
   document.getElementById('btnDelP').onclick=()=>{if(confirm('Xoá hẳn sản phẩm “'+p.name+'”?')){armUndo();DB.products=DB.products.filter(x=>x.id!==p.id);save();closeModal();renderAll();toastUndo('Đã xoá sản phẩm.');}};
-  modalBox.querySelectorAll('[data-lotdec]').forEach(b=>b.onclick=()=>{const l=p.lots.find(x=>x.id===b.dataset.lotdec);if(l&&l.qty>0){l.qty--;save();openProduct(id);renderAll();}});
+  modalBox.querySelectorAll('[data-lotdec]').forEach(b=>b.onclick=()=>{const l=p.lots.find(x=>x.id===b.dataset.lotdec);if(l)lotDecForm(p,l);});
   modalBox.querySelectorAll('[data-lotdel]').forEach(b=>b.onclick=()=>{if(confirm('Xoá lô này?')){armUndo();p.lots=p.lots.filter(x=>x.id!==b.dataset.lotdel);save();openProduct(id);renderAll();toastUndo('Đã xoá lô hàng.');}});
 }
 function lotForm(p){
@@ -389,6 +389,19 @@ function lotForm(p){
     const last=p.priceHistory[p.priceHistory.length-1];
     if(price>0&&(!last||last.kind!=='Giá nhập'||last.price!==price))p.priceHistory.push({date:todayISO(),kind:'Giá nhập',price});
     save();renderAll();toast('Đã nhập lô.');openProduct(p.id);};
+}
+/* v2.5.5: bớt số lượng của 1 lô theo số tự nhập (trước đây mỗi lần bấm chỉ
+   trừ đúng 1 — muốn trừ nhiều phải bấm nhiều lần, Cruz góp ý 2026-11-10). */
+function lotDecForm(p,l){
+  openModal('<h2>Bớt số lượng — '+esc(p.name)+'</h2><form id="fLotDec">'+
+    '<p class="sub" style="color:var(--muted);font-size:13.5px;margin:0 0 10px">Lô nhập '+fmtDate(l.date)+' · hiện còn <b>'+l.qty+' '+esc(p.unit||'')+'</b>. Dùng khi bán ra, huỷ hàng hỏng/hết hạn, hoặc sửa sai số lượng đã nhập.</p>'+
+    field('Số lượng cần bớt *','<input id="ldQty" type="number" min="0" step="any" required value="1">')+
+    '<div class="actions"><button class="btn btn-primary" type="submit">Bớt số lượng</button></div></form>');
+  document.getElementById('fLotDec').onsubmit=e=>{e.preventDefault();
+    const n=num(document.getElementById('ldQty').value);
+    if(!(n>0)){alert('Hãy nhập số lượng cần bớt lớn hơn 0.');return;}
+    if(n>l.qty){alert('Lô này chỉ còn '+l.qty+' '+esc(p.unit||'')+' — không bớt quá số đang có được.');return;}
+    l.qty-=n;save();renderAll();toast('Đã bớt '+n+' '+esc(p.unit||'')+' — lô còn '+l.qty+'.');openProduct(p.id);};
 }
 
 /* ---------- quét barcode ----------
@@ -1177,7 +1190,9 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    có ô chọn khuất trong form Sửa nên tưởng chưa có).
    v2.5.4 (Cruz yêu cầu khi rà soát bàn giao): mục Thu chi có LÃI/LỖ =
    Thu − Chi theo tháng này và tổng thể (thẻ riêng, lỗ thì đỏ + ghi "(lỗ)"),
-   kèm dòng tổng hợp theo đúng khoảng ngày đang lọc. */
+   kèm dòng tổng hợp theo đúng khoảng ngày đang lọc.
+   v2.5.5: nút "Bớt 1" ở lô hàng → form nhập số lượng cần bớt (bớt bao
+   nhiêu tuỳ ý, chặn bớt quá số đang còn). */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
