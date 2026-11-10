@@ -1075,8 +1075,20 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    proxy /__/auth/* + /__/firebase/* về firebaseapp.com (file _redirects ở
    gốc repo) nên trang xử lý đăng nhập CÙNG miền với app khi chạy trên
    Netlify → Google đăng nhập được. Hệ quả: link chính cho khách là Netlify;
-   bản GitHub Pages chỉ còn đăng nhập email/mật khẩu là chắc chắn. */
-const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.netlify.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
+   bản GitHub Pages chỉ còn đăng nhập email/mật khẩu là chắc chắn.
+   v2.4: CHUYỂN NHÀ sang VERCEL (để bỏ hẳn badge "Powered by Netlify" — gỡ
+   badge trên Netlify phải trả phí; Vercel miễn phí không chèn badge, deploy
+   thẳng từ GitHub nên cũng khỏi cần mật khẩu Google như Firebase CLI).
+   Cruz chốt Firebase Hosting trước rồi đổi sang Vercel giữa chừng
+   ("Hay deploy lên vercel") — Firebase Hosting chưa từng deploy thật.
+   Chiêu cùng miền giữ nguyên như v2.3 nhưng qua file vercel.json ở gốc repo:
+   rewrites proxy /__/auth/* + /__/firebase/* về firebaseapp.com và
+   authDomain = cuahangtuyen.vercel.app. vercel.json cũng đặt Cache-Control
+   no-cache cho mọi file nên hết cảnh app.js bị cache 10 phút như Pages.
+   LINK CHÍNH từ v2.4: https://cuahangtuyen.vercel.app — Netlify/Pages thành
+   dự phòng (đăng nhập email vẫn được; Google ở đó khác miền với authDomain
+   nên có thể lại bị Chrome chặn). */
+const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
 try{const _s=JSON.parse(localStorage.getItem(SYNC_KEY)||'null');if(_s&&typeof _s==='object')_sync=Object.assign(_sync,_s);}catch(e){}
