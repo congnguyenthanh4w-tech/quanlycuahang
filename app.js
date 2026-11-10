@@ -1,5 +1,6 @@
 'use strict';
-/* QuanLyCuaHang — bản v1 chạy trên trình duyệt (localStorage).
+/* QuanLyCuaHang — v2: chạy trên trình duyệt (localStorage) + đồng bộ server
+   qua Firebase khi đăng nhập tài khoản (xem khối ĐỒNG BỘ SERVER ở cuối file).
    Mô hình dữ liệu:
    villages[]  {id,name}
    customers[] {id,name,villageId,phone,note}
@@ -44,7 +45,7 @@ function normalizeDB(d){
   if(!Array.isArray(d.units)||!d.units.length)d.units=[...new Set([...DEFAULT_UNITS,...d.products.map(x=>x.unit).filter(Boolean)])];
   return d;}
 function load(){try{const raw=localStorage.getItem(LS_KEY);if(raw){const d=JSON.parse(raw);if(d&&Array.isArray(d.products))return normalizeDB(d);}}catch(e){}return defaults();}
-function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(DB));}catch(e){toast('⚠️ Bộ nhớ đầy — hãy xoá bớt ảnh hoặc Sao lưu rồi dọn dữ liệu.');}}
+function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(DB));}catch(e){toast('⚠️ Bộ nhớ đầy — hãy xoá bớt ảnh hoặc Sao lưu rồi dọn dữ liệu.');}syncTouch();}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.add('hidden'),2600);}
 let _undoSnap=null;
 function armUndo(){_undoSnap=JSON.stringify(DB);}
@@ -768,27 +769,7 @@ window.__qlch={get DB(){return DB;},renderAll,buildXlsxBlob,buildSheets,exportEx
 renderAll();
 updatePinState();
 if(hasPin())showLock();
-if(!DB.customers.length&&!DB.products.length&&!DB.suppliers.length&&!localStorage.getItem('qlch_started')){
-  setTimeout(()=>{if(confirm('App đang trống. Nạp ít dữ liệu mẫu để xem thử các mục hoạt động thế nào? (xoá được bằng Sao lưu → tự xoá tay từng mục, hoặc cứ để vậy nhập đè dữ liệu thật)'))seedDemo();},400);
-}
-function seedDemo(){
-  const v1=DB.villages[0],v2=DB.villages[1];
-  const c1={id:uid(),name:'Khách hàng A',villageId:v1.id,phone:'0900000001',note:'Nhà gần đình'};
-  const c2={id:uid(),name:'Khách hàng B',villageId:v2.id,phone:'0900000002',note:''};
-  DB.customers.push(c1,c2);
-  const s1={id:uid(),name:'Nhà cung cấp A',phone:'0911111111',address:'',note:''};
-  DB.suppliers.push(s1);
-  DB.products.push({id:uid(),name:'Coca-Cola lon 330ml',code:'HH001',barcode:'8934588012114',group:'Nước ngọt',unit:'Lon',
-    sellPrice:10000,threshold:24,warnDays:30,status:'active',image:'',
-    lots:[{id:uid(),date:todayISO(),qty:48,importPrice:7500,expiry:todayISO()}],
-    priceHistory:[{date:todayISO(),kind:'Giá nhập',price:7500}]});
-  const d={id:uid(),customerId:c1.id,datetime:nowLocal(),note:'1 thùng Coca + 2 gói kẹo',total:350000,evidence:'',evidenceName:'',payments:[]};
-  DB.debts.push(d);
-  const inv={id:uid(),supplierId:s1.id,date:todayISO(),total:1200000,image:'',note:'Nhập nước ngọt',payments:[]};
-  DB.invoices.push(inv);
-  save();renderAll();toast('Đã nạp dữ liệu mẫu.');
-}
-
+if(!localStorage.getItem('qlch_started'))localStorage.setItem('qlch_started','1');
 /* ---------- sidebar (desktop) ---------- */
 document.getElementById('sideNav').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(b)switchTab(b.dataset.tab);});
 document.getElementById('btnThemeSide').onclick=()=>document.getElementById('btnTheme').click();
@@ -969,3 +950,114 @@ document.querySelectorAll('.js-excel').forEach(b=>b.addEventListener('click',exp
 document.getElementById('qAddProduct').addEventListener('click',()=>{switchTab('products');productForm(null);});
 document.getElementById('qAddCustomer').addEventListener('click',()=>{switchTab('debts');customerForm(null);});
 document.getElementById('qExcel').addEventListener('click',exportExcel);
+
+/* ---------- ĐỒNG BỘ SERVER (Firebase Auth + Firestore) ----------
+   Mô hình: toàn bộ DB là 1 document stores/{uid} trên Firestore.
+   Máy nào đăng nhập cùng 1 tài khoản sẽ dùng chung bộ dữ liệu đó.
+   Chưa đăng nhập hoặc mất mạng: app vẫn chạy hoàn toàn bằng localStorage;
+   khi đăng nhập lại sẽ tự đồng bộ (bản có updatedAt mới hơn sẽ thắng). */
+const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"quanlycuahang-1aa8a.firebaseapp.com",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
+const SYNC_KEY='qlch_sync';
+let _sync={uid:'',email:'',updatedAt:0,lastSyncAt:0};
+try{const _s=JSON.parse(localStorage.getItem(SYNC_KEY)||'null');if(_s&&typeof _s==='object')_sync=Object.assign(_sync,_s);}catch(e){}
+let _fbReady=false,_pushTimer=null,_applyingRemote=false,_unsubSnap=null,_pushingVal=0;
+function syncSaveMeta(){try{localStorage.setItem(SYNC_KEY,JSON.stringify(_sync));}catch(e){}}
+function syncTouch(){if(_applyingRemote)return;_sync.updatedAt=Date.now();syncSaveMeta();updateSyncState();schedulePush();}
+function schedulePush(){if(!_fbReady||!_sync.uid)return;clearTimeout(_pushTimer);_pushTimer=setTimeout(()=>{pushCloud(false);},1500);}
+function fmtTime(ts){if(!ts)return'';const d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+function updateSyncState(){
+  let txt;
+  if(!FB_CONFIG)txt='Dữ liệu đang lưu trên thiết bị này.';
+  else if(!_sync.uid)txt='Chưa đăng nhập — dữ liệu chỉ lưu ở máy này.';
+  else txt='☁️ '+_sync.email+(_sync.lastSyncAt?' — đã đồng bộ '+fmtTime(_sync.lastSyncAt):' — đang chờ đồng bộ…');
+  document.querySelectorAll('.sync-state').forEach(el=>{el.textContent=txt;});
+}
+function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+async function initSync(){
+  updateSyncState();
+  if(!FB_CONFIG)return;
+  try{
+    const base='https://www.gstatic.com/firebasejs/10.12.2/';
+    await loadScript(base+'firebase-app-compat.js');
+    await loadScript(base+'firebase-auth-compat.js');
+    await loadScript(base+'firebase-firestore-compat.js');
+    firebase.initializeApp(FB_CONFIG);
+    _fbReady=true;
+    firebase.auth().onAuthStateChanged(async user=>{
+      if(_unsubSnap){_unsubSnap();_unsubSnap=null;}
+      if(user){
+        _sync.uid=user.uid;_sync.email=user.email||'';syncSaveMeta();updateSyncState();
+        await firstSync();
+        _unsubSnap=firebase.firestore().doc('stores/'+user.uid).onSnapshot(snap=>{
+          if(!snap.exists)return;const d=snap.data();
+          if(d&&d.updatedAt>_sync.updatedAt&&d.updatedAt!==_pushingVal)applyRemote(d.data,d.updatedAt);
+        },()=>{});
+        updateSyncState();
+      }else{
+        _sync.uid='';_sync.email='';syncSaveMeta();updateSyncState();
+      }
+    });
+  }catch(e){/* Không tải được Firebase (mất mạng…) → chạy local như cũ */}
+}
+async function firstSync(){
+  try{
+    const ref=firebase.firestore().doc('stores/'+_sync.uid);
+    const snap=await ref.get();
+    if(!snap.exists){await pushCloud(true);return;}
+    const d=snap.data();
+    if(d.updatedAt>_sync.updatedAt)applyRemote(d.data,d.updatedAt);
+    else if(d.updatedAt<_sync.updatedAt)await pushCloud(true);
+    else{_sync.lastSyncAt=Date.now();syncSaveMeta();updateSyncState();}
+  }catch(e){toast('Chưa đồng bộ được — kiểm tra mạng rồi thử lại.');}
+}
+async function pushCloud(loud){
+  if(!_fbReady||!_sync.uid)return false;
+  const payload={data:JSON.parse(JSON.stringify(DB)),updatedAt:_sync.updatedAt||Date.now(),email:_sync.email,v:2};
+  if(JSON.stringify(payload).length>950000){toast('⚠️ Dữ liệu kèm ảnh đã quá lớn để đồng bộ tự động — hãy Sao lưu file JSON để giữ an toàn.');return false;}
+  try{
+    _pushingVal=payload.updatedAt;
+    await firebase.firestore().doc('stores/'+_sync.uid).set(payload);
+    _sync.lastSyncAt=Date.now();syncSaveMeta();updateSyncState();
+    return true;
+  }catch(e){if(loud)toast('Đẩy dữ liệu lên server chưa được — kiểm tra mạng.');return false;}
+}
+function applyRemote(data,updatedAt){
+  if(!data||!Array.isArray(data.products))return;
+  _applyingRemote=true;
+  DB=normalizeDB(data);
+  try{localStorage.setItem(LS_KEY,JSON.stringify(DB));}catch(e){}
+  _sync.updatedAt=updatedAt;_sync.lastSyncAt=Date.now();syncSaveMeta();
+  renderAll();updateSyncState();
+  _applyingRemote=false;
+  toast('Đã lấy dữ liệu mới nhất từ server.');
+}
+const AUTH_ERR={'auth/invalid-email':'Email chưa đúng định dạng.','auth/user-not-found':'Chưa có tài khoản với email này — bấm "Đăng ký tài khoản mới".','auth/wrong-password':'Sai mật khẩu.','auth/invalid-credential':'Email hoặc mật khẩu chưa đúng.','auth/email-already-in-use':'Email này đã có tài khoản — hãy bấm "Đăng nhập".','auth/weak-password':'Mật khẩu phải từ 6 ký tự trở lên.','auth/network-request-failed':'Lỗi mạng — kiểm tra kết nối rồi thử lại.','auth/too-many-requests':'Thử sai quá nhiều lần — đợi ít phút rồi thử lại.'};
+function accountModal(){
+  if(!FB_CONFIG){openModal('<h2>Tài khoản & đồng bộ</h2><p class="acc-note">Bản app này chưa bật đồng bộ server.</p>');return;}
+  if(!_fbReady){openModal('<h2>Tài khoản & đồng bộ</h2><p class="acc-note">Đang kết nối server… đợi vài giây rồi mở lại mục này. Nếu đang mất mạng, app vẫn dùng dữ liệu trên máy bình thường.</p>');return;}
+  if(!_sync.uid){
+    openModal('<h2>☁️ Tài khoản & đồng bộ</h2>'
+    +'<p class="acc-note">Đăng nhập cùng 1 tài khoản trên các máy (điện thoại, máy tính) để dùng chung một bộ dữ liệu. Chưa có tài khoản thì bấm "Đăng ký tài khoản mới" — dữ liệu đang có trên máy này sẽ được đưa lên server ở lần đồng bộ đầu tiên.</p>'
+    +field('Email','<input id="accEmail" type="email" autocomplete="username" placeholder="vidu@gmail.com">')
+    +field('Mật khẩu','<input id="accPass" type="password" autocomplete="current-password" placeholder="Ít nhất 6 ký tự">')
+    +'<p class="acc-err hidden" id="accErr"></p>'
+    +'<div class="acc-actions"><button class="btn btn-primary" id="accLogin">Đăng nhập</button><button class="btn" id="accReg">Đăng ký tài khoản mới</button></div>');
+    const err=m=>{const e=document.getElementById('accErr');e.textContent=m;e.classList.remove('hidden');};
+    const cred=()=>({email:document.getElementById('accEmail').value.trim(),pass:document.getElementById('accPass').value});
+    document.getElementById('accLogin').onclick=async()=>{const c=cred();if(!c.email||!c.pass)return err('Hãy nhập email và mật khẩu.');try{await firebase.auth().signInWithEmailAndPassword(c.email,c.pass);closeModal();toast('Đã đăng nhập — đang đồng bộ dữ liệu…');}catch(e){err(AUTH_ERR[e.code]||('Không đăng nhập được: '+e.message));}};
+    document.getElementById('accReg').onclick=async()=>{const c=cred();if(!c.email||!c.pass)return err('Hãy nhập email và mật khẩu.');try{await firebase.auth().createUserWithEmailAndPassword(c.email,c.pass);closeModal();toast('Đã tạo tài khoản — đang đưa dữ liệu lên server…');}catch(e){err(AUTH_ERR[e.code]||('Không đăng ký được: '+e.message));}};
+  }else{
+    openModal('<h2>☁️ Tài khoản & đồng bộ</h2>'
+    +'<p>Đang đăng nhập: <strong>'+esc(_sync.email)+'</strong></p>'
+    +'<p class="acc-note">'+(_sync.lastSyncAt?('Lần đồng bộ gần nhất: '+fmtTime(_sync.lastSyncAt)+'. '):'Chưa đồng bộ lần nào. ')+'Mọi thay đổi sẽ tự động lên server sau khoảng 2 giây. Nếu hai máy cùng sửa một lúc, bản lưu sau cùng sẽ thắng.</p>'
+    +'<div class="acc-actions"><button class="btn" id="accPush">⬆ Đẩy lên server ngay</button><button class="btn" id="accPull">⬇ Lấy từ server về</button></div>'
+    +'<div class="acc-actions"><button class="btn btn-ghost" id="accOut">Đăng xuất</button></div>'
+    +'<p class="acc-note">Đăng xuất không xoá dữ liệu trên máy này — máy chỉ ngừng đồng bộ cho tới khi đăng nhập lại.</p>');
+    document.getElementById('accPush').onclick=async()=>{if(await pushCloud(true)){closeModal();toast('Đã đẩy dữ liệu lên server.');}};
+    document.getElementById('accPull').onclick=()=>{if(!confirm('Lấy dữ liệu từ server về sẽ GHI ĐÈ dữ liệu đang có trên máy này. Tiếp tục?'))return;
+      firebase.firestore().doc('stores/'+_sync.uid).get().then(snap=>{if(!snap.exists){toast('Server chưa có dữ liệu nào.');return;}const d=snap.data();applyRemote(d.data,d.updatedAt);closeModal();}).catch(()=>toast('Không lấy được dữ liệu — kiểm tra mạng.'));};
+    document.getElementById('accOut').onclick=async()=>{await firebase.auth().signOut();closeModal();toast('Đã đăng xuất. Dữ liệu trên máy vẫn giữ nguyên.');};
+  }
+}
+document.querySelectorAll('.js-account').forEach(b=>b.addEventListener('click',accountModal));
+initSync();

@@ -312,3 +312,9 @@ a.btn{text-decoration:none;color:inherit}
 .danger-zone{margin:22px 14px 4px}
 @media(min-width:1024px){.danger-zone{width:calc(100% - 68px);max-width:1092px;margin:22px auto 4px}}
 @media(max-width:1023.5px){.content{padding-bottom:calc(70px + env(safe-area-inset-bottom))}.content main{padding-bottom:24px}}
+
+/* Đồng bộ server (v2) */
+.acc-note{color:var(--muted);font-size:13.5px;line-height:1.55}
+.acc-err{color:var(--danger);font-size:13.5px;margin:10px 0 0}
+.acc-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.acc-actions .btn{flex:1;white-space:nowrap}
