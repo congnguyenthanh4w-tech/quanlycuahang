@@ -785,14 +785,24 @@ const CHI_TYPES=['Thanh toán nhà cung cấp','Chi phí điện nước','Chi p
 function renderCash(){
   const t=todayISO();
   const sum=(kind,pred)=>DB.cash.filter(c=>c.kind===kind&&pred(c)).reduce((s,c)=>s+(Number(c.amount)||0),0);
+  /* v2.5.4: thêm LÃI/LỖ = Thu − Chi (tháng này + tổng thể) — trước đây chỉ có
+     thu/chi rời, không thấy lời lãi bao nhiêu (Cruz yêu cầu 2026-11-10). */
+  const mThu=sum('thu',c=>String(c.datetime).startsWith(t.slice(0,7))),mChi=sum('chi',c=>String(c.datetime).startsWith(t.slice(0,7))),mNet=mThu-mChi;
+  const aThu=sum('thu',()=>true),aChi=sum('chi',()=>true),aNet=aThu-aChi;
+  const netCard=(label,net)=>statCard('i-coins',net>=0?'green':'chi',label+(net>=0?'':' (lỗ)'),fmtMoney(Math.abs(net)),net>=0?'green':'red');
   document.getElementById('cashCards').innerHTML=
-    statCard('i-in','green','Thu hôm nay',fmtMoney(sum('thu',c=>String(c.datetime).startsWith(t))),'green')+
-    statCard('i-out','','Chi hôm nay',fmtMoney(sum('chi',c=>String(c.datetime).startsWith(t))))+
-    statCard('i-coins','green','Thu tháng này',fmtMoney(sum('thu',c=>String(c.datetime).startsWith(t.slice(0,7)))),'green')+
-    statCard('i-wallet','blue','Chi tháng này',fmtMoney(sum('chi',c=>String(c.datetime).startsWith(t.slice(0,7)))));
+    statCard('i-in','green','Thu tháng này',fmtMoney(mThu),'green')+
+    statCard('i-out','','Chi tháng này',fmtMoney(mChi))+
+    netCard('Lãi tháng này',mNet)+
+    statCard('i-in','green','Tổng thu (tất cả)',fmtMoney(aThu),'green')+
+    statCard('i-out','','Tổng chi (tất cả)',fmtMoney(aChi))+
+    netCard('Tổng lãi (tất cả)',aNet);
   const f=document.getElementById('cashFilter').value,from=document.getElementById('cashFrom').value,to=document.getElementById('cashTo').value;
   const list=DB.cash.filter(c=>(!f||c.kind===f)&&(!from||String(c.datetime).slice(0,10)>=from)&&(!to||String(c.datetime).slice(0,10)<=to))
     .slice().sort((a,b)=>String(b.datetime).localeCompare(String(a.datetime)));
+  const csEl=document.getElementById('cashSum');
+  if(csEl){const fThu=list.filter(c=>c.kind==='thu').reduce((s,c)=>s+(Number(c.amount)||0),0),fChi=list.filter(c=>c.kind==='chi').reduce((s,c)=>s+(Number(c.amount)||0),0),fNet=fThu-fChi;
+    csEl.innerHTML=list.length?('Khoảng đang xem: <b>'+list.length+' giao dịch</b> · Thu <b class="money green">'+fmtMoney(fThu)+'</b> · Chi <b class="money red">'+fmtMoney(fChi)+'</b> · '+(fNet>=0?'Lãi <b class="money green">':'Lỗ <b class="money red">')+fmtMoney(Math.abs(fNet))+'</b>'):'';}
   document.getElementById('cashList').innerHTML=list.length?list.map(c=>
     '<div class="row no-click"><span class="dot-ico '+(c.kind==='thu'?'':'chi')+'" style="width:40px;height:40px;border-radius:11px">'+ic(c.kind==='thu'?'i-in':'i-out')+'</span>'+(c.evidence&&String(c.evidence).startsWith('data:image')?'<img class="thumb" src="'+c.evidence+'" style="width:44px;height:44px" alt="Ảnh chứng từ">':'')+'<div class="grow"><div class="title">'+esc(c.type)+'</div>'+
     '<div class="sub">'+fmtDT(c.datetime)+(c.content?' · '+esc(c.content):'')+(c.person?' · '+esc(c.person):'')+'</div>'+
@@ -1164,7 +1174,10 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    v2.5.3 (Cruz tự test góp ý): lưu sản phẩm xong ĐÓNG popup luôn (trước tự
    mở tiếp chi tiết phải tắt thêm lần nữa) + trạng thái ngừng kinh doanh
    hiện rõ ở trang chi tiết kèm nút Ngừng/Kinh doanh lại 1 chạm (trước chỉ
-   có ô chọn khuất trong form Sửa nên tưởng chưa có). */
+   có ô chọn khuất trong form Sửa nên tưởng chưa có).
+   v2.5.4 (Cruz yêu cầu khi rà soát bàn giao): mục Thu chi có LÃI/LỖ =
+   Thu − Chi theo tháng này và tổng thể (thẻ riêng, lỗ thì đỏ + ghi "(lỗ)"),
+   kèm dòng tổng hợp theo đúng khoảng ngày đang lọc. */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
