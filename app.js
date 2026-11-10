@@ -181,8 +181,16 @@ function renderDashboard(){
   if(tbadge){tbadge.textContent=totalAlerts;tbadge.classList.toggle('hidden',totalAlerts===0);}
   const bh=document.getElementById('backupHint');
   if(bh){const lastB=Number(localStorage.getItem('qlch_backup_at')||0);const hasData=DB.products.length||DB.debts.length||DB.customers.length;
-    bh.innerHTML=(hasData&&(!lastB||Date.now()-lastB>7*86400000))?
-      '<div class="backup-hint"><span>⚠ '+(lastB?'Đã hơn 7 ngày chưa sao lưu dữ liệu.':'Bạn chưa từng sao lưu dữ liệu.')+' Hãy sao lưu để không mất dữ liệu khi đổi máy hoặc xoá trình duyệt.</span><button class="btn btn-small" id="bhBtn">Sao lưu ngay</button></div>':'';
+    /* v2.5.2: chỉ nhắc khi dữ liệu THẬT SỰ chưa an toàn — banner cũ (v1) chỉ
+       nhìn lần tải file sao lưu nên báo động giả dù đã đồng bộ server.
+       Đã đồng bộ ≤7 ngày HOẶC mới sao lưu file ≤7 ngày → im lặng.
+       Đọc lastSyncAt từ bản đã lưu trong máy (không đụng biến _sync ở phần
+       Sync khai báo phía dưới — render có thể chạy trước khi tới lượt nó). */
+    let lastS=0; try{lastS=Number((JSON.parse(localStorage.getItem('qlch_sync')||'{}')).lastSyncAt||0);}catch(e){}
+    const syncedOk=lastS&&(Date.now()-lastS<=7*86400000);
+    const backupOk=lastB&&(Date.now()-lastB<=7*86400000);
+    bh.innerHTML=(hasData&&!syncedOk&&!backupOk)?
+      '<div class="backup-hint"><span>⚠ '+((!lastB&&!lastS)?'Dữ liệu trên máy này chưa được đồng bộ lên server, cũng chưa từng sao lưu.':'Đã hơn 7 ngày dữ liệu chưa được đồng bộ lên server hay sao lưu.')+' Kiểm tra đăng nhập/mạng, hoặc bấm Sao lưu để tải 1 bản dự phòng.</span><button class="btn btn-small" id="bhBtn">Sao lưu ngay</button></div>':'';
     const bb=document.getElementById('bhBtn');if(bb)bb.onclick=()=>document.getElementById('btnExport').click();}
   const sub=document.getElementById('dashSub'); if(sub)sub.textContent='Tình hình cửa hàng · '+fmtDate(t);
   const grp=(title,icon,tint,items,hot)=>items.length?
@@ -1144,7 +1152,11 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    trúng mã đã có thì hỏi mở sản phẩm cũ (chặn tạo trùng cả khi lưu),
    mã mới thì thử tra tên gợi ý từ Open Food Facts (giá vẫn nhập tay).
    Hotfix sau khi Cruz quét thử: tra không thấy tên thì hiện câu giải thích
-   "mã vạch chỉ là dãy số…" kẻo tưởng app hỏng (EAN-13 không chứa tên/giá/hạn). */
+   "mã vạch chỉ là dãy số…" kẻo tưởng app hỏng (EAN-13 không chứa tên/giá/hạn).
+   v2.5.2: banner sao lưu hết báo động giả — chỉ hiện khi dữ liệu thật sự
+   chưa an toàn (chưa đồng bộ server ≤7 ngày VÀ chưa sao lưu file ≤7 ngày);
+   lastSyncAt đọc từ qlch_sync đã lưu, không đụng biến _sync (tránh lỗi
+   "truy cập trước khi khởi tạo" khi render chạy sớm/môi trường chặn SDK). */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
