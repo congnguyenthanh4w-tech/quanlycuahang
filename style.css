@@ -56,8 +56,23 @@ html[data-theme="dark"] .side-tab.active{color:var(--accent)}
 .top-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .tabs{display:none}
 @media(max-width:1023.5px){
-  .tabs{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:25;gap:2px;padding:7px 8px calc(7px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line)}
-  main{padding-bottom:104px}
+  /* Header gọn 2 hàng ngay ngắn: brand + nút theme ở hàng trên,
+     3 nút thao tác chia đều hàng dưới (trước đây các nút tự xuống dòng lộn xộn). */
+  .topbar{flex-wrap:wrap;gap:9px 10px;padding:10px 14px 12px}
+  .brand{flex:1 1 auto;min-width:0}
+  .brand-mark{width:38px;height:38px;border-radius:11px}
+  .brand strong{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .brand small{display:none}
+  .top-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;flex:1 1 100%}
+  .top-actions .btn{justify-content:center;padding:8px 4px;font-size:13.5px}
+  #btnTheme{order:-1;position:absolute;top:9px;right:14px;padding:7px 12px;font-size:13px;border-radius:999px}
+  .topbar{position:relative}
+  /* Thanh tab "nổi" cách đáy 56px: chừa vùng góc dưới-phải cho badge
+     "Powered by Netlify" để nó không che mất tab nào. */
+  .tabs{display:flex;position:fixed;left:8px;right:8px;bottom:56px;z-index:25;gap:2px;padding:6px;background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--line);border-radius:18px;box-shadow:0 10px 28px rgba(10,20,30,.18)}
+  main{padding-bottom:172px}
+  .foot{padding-bottom:150px}
+  .toast{bottom:132px}
 }
 .tab{flex:1;border:0;background:transparent;border-radius:11px;padding:7px 2px;cursor:pointer;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
 .tab span{font-size:11px}
@@ -204,6 +219,13 @@ table.stats th{color:var(--muted);font-weight:600;background:var(--surface2)}
 .toast.hidden{display:none}
 .hidden{display:none!important}
 #scanVideo{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:60}
+#scanOverlay{position:fixed;inset:0;z-index:65;background:#000;display:flex;flex-direction:column}
+#scanOverlay.hidden{display:none}
+#scanView{flex:1;position:relative;overflow:hidden}
+#scanView video{width:100%;height:100%;object-fit:cover}
+#scanView canvas.drawingBuffer{position:absolute;inset:0;width:100%;height:100%}
+.scan-frame{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);width:min(78vw,430px);height:150px;border:2px solid rgba(255,255,255,.85);border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.35);pointer-events:none;z-index:2}
+.scan-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px calc(14px + env(safe-area-inset-bottom));color:#fff;background:rgba(0,0,0,.88);font-size:14.5px;position:relative;z-index:2}
 ::-webkit-scrollbar{width:9px;height:9px}
 ::-webkit-scrollbar-thumb{background:var(--line);border-radius:99px}
 @media(max-width:640px){

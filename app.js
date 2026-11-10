@@ -372,24 +372,82 @@ function lotForm(p){
     save();renderAll();toast('Đã nhập lô.');openProduct(p.id);};
 }
 
-/* ---------- quét barcode ---------- */
+/* ---------- quét barcode ----------
+   3 tầng: (1) BarcodeDetector có sẵn của trình duyệt; (2) nếu máy không có
+   BarcodeDetector (nhiều máy Android/iPhone) thì tải bộ quét Quagga2 quét
+   trực tiếp qua camera; (3) nếu không mở được camera trực tiếp thì chụp ảnh
+   mã vạch rồi giải mã từ ảnh. */
+function onBarcode(code){
+  document.getElementById('prodSearch').value=code;prodGroupFilter='';renderProducts();
+  const hit=DB.products.find(p=>p.barcode===code);
+  toast(hit?'Tìm thấy: '+hit.name:'Chưa có sản phẩm với barcode này — bấm Thêm và điền sẵn mã.');
+}
+/* Chỉ giữ các định dạng dài (EAN-13, UPC-A, Code128): các reader định dạng ngắn
+   (EAN-8/UPC-E) dễ đọc nhầm một đoạn của mã dài thành mã ngắn sai. */
+const SCAN_READERS=['ean_reader','upc_reader','code_128_reader'];
+let _quaggaLoading=null;
+function loadQuagga(){
+  if(window.Quagga)return Promise.resolve();
+  if(_quaggaLoading)return _quaggaLoading;
+  /* Bộ quét Quagga2 đóng gói sẵn cạnh app (quagga.min.js) — không cần mạng. */
+  _quaggaLoading=loadScript('quagga.min.js')
+    .catch(e=>{_quaggaLoading=null;throw e;});
+  return _quaggaLoading;
+}
+function scanByPhoto(){
+  loadQuagga().then(()=>{
+    const inp=document.getElementById('scanPhoto');inp.value='';
+    inp.onchange=()=>{const f=inp.files&&inp.files[0];if(!f)return;
+      const r=new FileReader();
+      r.onload=()=>{Quagga.decodeSingle({src:r.result,numOfWorkers:0,inputStream:{size:1600},
+          decoder:{readers:SCAN_READERS},locate:true},
+        res=>{const code=res&&res.codeResult&&res.codeResult.code;
+          if(code)onBarcode(code);
+          else toast('Không đọc được mã trong ảnh — chụp gần, rõ và đủ sáng hơn, hoặc gõ barcode vào ô tìm kiếm.');});};
+      r.readAsDataURL(f);};
+    inp.click();
+  }).catch(()=>toast('Không tải được bộ quét (cần có mạng) — hãy gõ barcode vào ô tìm kiếm.'));
+}
+function stopQuaggaScan(){
+  try{Quagga.offDetected();Quagga.stop();}catch(e){}
+  document.getElementById('scanOverlay').classList.add('hidden');
+}
+function scanLiveFallback(){
+  loadQuagga().then(()=>{
+    const ov=document.getElementById('scanOverlay');ov.classList.remove('hidden');
+    document.getElementById('btnScanClose').onclick=stopQuaggaScan;
+    let done=false;
+    Quagga.onDetected(res=>{if(done)return;const code=res&&res.codeResult&&res.codeResult.code;
+      if(!code)return;done=true;stopQuaggaScan();onBarcode(code);});
+    Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('scanView'),
+        constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
+      locator:{patchSize:'medium',halfSample:true},numOfWorkers:2,frequency:10,
+      decoder:{readers:SCAN_READERS},locate:true},
+      err=>{if(err){ov.classList.add('hidden');toast('Không mở được camera trực tiếp — chuyển sang chụp ảnh mã vạch.');scanByPhoto();return;}
+        Quagga.start();});
+  }).catch(()=>scanByPhoto());
+}
 document.getElementById('btnScan').onclick=async()=>{
-  const v=document.getElementById('scanVideo');
-  if(!('BarcodeDetector' in window)||!navigator.mediaDevices){toast('Máy này chưa hỗ trợ quét — hãy gõ barcode vào ô tìm kiếm.');return;}
-  try{
-    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
-    v.srcObject=stream;v.classList.remove('hidden');await v.play();
-    const det=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128']});
-    toast('Đưa mã vạch vào camera… chạm màn hình để huỷ.');
-    const tick=async()=>{ if(v.classList.contains('hidden'))return;
-      try{const codes=await det.detect(v);if(codes&&codes.length){
-        const code=codes[0].rawValue;stopScan();document.getElementById('prodSearch').value=code;prodGroupFilter='';renderProducts();
-        const hit=DB.products.find(p=>p.barcode===code);toast(hit?'Tìm thấy: '+hit.name:'Chưa có sản phẩm với barcode này — bấm Thêm và điền sẵn mã.');return;}}catch(e){}
-      requestAnimationFrame(()=>setTimeout(tick,250));};
-    tick();
-    v.onclick=stopScan;
-    function stopScan(){v.classList.add('hidden');stream.getTracks().forEach(t=>t.stop());}
-  }catch(e){toast('Không mở được camera.');}
+  const hasCam=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia);
+  if(hasCam&&'BarcodeDetector' in window){
+    const v=document.getElementById('scanVideo');
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+      v.srcObject=stream;v.classList.remove('hidden');await v.play();
+      const det=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128']});
+      toast('Đưa mã vạch vào camera… chạm màn hình để huỷ.');
+      const tick=async()=>{ if(v.classList.contains('hidden'))return;
+        try{const codes=await det.detect(v);if(codes&&codes.length){
+          const code=codes[0].rawValue;stopScan();onBarcode(code);return;}}catch(e){}
+        requestAnimationFrame(()=>setTimeout(tick,250));};
+      tick();
+      v.onclick=stopScan;
+      function stopScan(){v.classList.add('hidden');stream.getTracks().forEach(t=>t.stop());}
+    }catch(e){toast('Không mở được camera — hãy kiểm tra quyền camera của trình duyệt.');}
+    return;
+  }
+  if(hasCam){scanLiveFallback();return;}
+  scanByPhoto();
 };
 
 /* ---------- CÔNG NỢ KHÁCH HÀNG ---------- */

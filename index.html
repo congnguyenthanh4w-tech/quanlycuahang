@@ -199,6 +199,12 @@
   </div>
 </div>
 <video id="scanVideo" class="hidden" playsinline></video>
+<div id="scanOverlay" class="hidden">
+  <div id="scanView"></div>
+  <div class="scan-frame"></div>
+  <div class="scan-bar"><span>Đưa mã vạch vào khung camera…</span><button id="btnScanClose" class="btn" type="button">Đóng</button></div>
+</div>
+<input type="file" id="scanPhoto" accept="image/*" capture="environment" class="hidden">
 <div id="toast" class="toast hidden"></div>
 
 <script src="app.js"></script>
