@@ -52,7 +52,7 @@ html[data-theme="dark"] .side-tab.active{color:var(--accent)}
 .side-note{color:var(--muted);font-size:12px;margin-top:6px}
 
 /* ---------- mobile header & tabs ---------- */
-.topbar{position:sticky;top:0;z-index:20;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 14px;background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.topbar{position:static;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 14px;background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
 .top-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .tabs{display:none}
 @media(max-width:1023.5px){
@@ -318,3 +318,6 @@ a.btn{text-decoration:none;color:inherit}
 .acc-err{color:var(--danger);font-size:13.5px;margin:10px 0 0}
 .acc-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 .acc-actions .btn{flex:1;white-space:nowrap}
+.member-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)}
+.member-row em{color:var(--muted);font-style:normal;font-size:12.5px}
+.member-row .member-del{color:var(--danger);padding:4px 10px}
