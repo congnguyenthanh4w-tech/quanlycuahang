@@ -111,7 +111,13 @@ function openModal(html){modalBox.innerHTML='<button class="close-x" id="modalCl
   document.getElementById('modalClose').onclick=closeModal;
   modalBox.querySelectorAll('input.mn').forEach(inp=>{
     if(inp.value){const v=num(inp.value);if(v)inp.value=v.toLocaleString('vi-VN');}
-    inp.addEventListener('input',()=>{const raw=inp.value.replace(/[^\d]/g,'');inp.value=raw?Number(raw).toLocaleString('vi-VN'):'';});});
+    inp.addEventListener('input',()=>{const raw=inp.value.replace(/[^\d]/g,'');inp.value=raw?Number(raw).toLocaleString('vi-VN'):'';});
+    /* v2.5.7: chip gợi ý nhập tiền nhanh dưới mọi ô tiền — bấm 1 cái điền
+       luôn số tiền, khỏi gõ nhiều số 0 (Cruz yêu cầu 2026-11-10). */
+    const mq=document.createElement('div');mq.className='mq-row';
+    mq.innerHTML=[10000,20000,50000,100000,500000,1000000].map(v=>'<button type="button" class="mq" data-v="'+v+'">'+v.toLocaleString('vi-VN')+'</button>').join('');
+    inp.insertAdjacentElement('afterend',mq);
+    mq.querySelectorAll('.mq').forEach(b=>b.onclick=()=>{inp.value=Number(b.dataset.v).toLocaleString('vi-VN');inp.dispatchEvent(new Event('input',{bubbles:true}));inp.focus();});});
   modalBox.querySelectorAll('input[type="file"]').forEach(inp=>{
     inp.classList.add('filepick-native');
     const isVideo=(inp.accept||'').indexOf('video')>=0;
@@ -237,7 +243,7 @@ function renderProducts(){
       '<div class="grow"><div class="title">'+esc(p.name)+(p.status==='stopped'?' <span class="badge">Ngừng kinh doanh</span>':'')+'</div>'+
       '<div class="sub">'+esc(p.code||'')+(p.barcode?' · '+esc(p.barcode):'')+' · '+esc(p.group||'')+' · Bán '+fmtMoney(p.sellPrice)+'</div>'+
       alerts.map(a=>'<span class="badge '+((a.kind==='expired'||a.kind==='out')?'red':'amber')+'">'+esc(a.label)+'</span> ').join('')+
-      '</div><div style="text-align:right"><div class="sub">Tồn kho</div><b>'+st+' '+esc(p.unit||'')+'</b></div></div>';
+      '</div><div style="text-align:right;flex:none"><div class="sub">Tồn kho</div><b>'+st+' '+esc(p.unit||'')+'</b></div></div>';
   }).join(''):'<div class="empty">Chưa có sản phẩm nào khớp. Bấm “＋ Thêm sản phẩm”.</div>';
 }
 document.getElementById('prodSearch').addEventListener('input',renderProducts);
@@ -550,10 +556,10 @@ function renderDebts(){
     return '<div class="group-head">'+(v?esc(v.name):'(Chưa rõ thôn)')+'</div><div class="list">'+
       groups[vid].map(c=>{const t=customerDebtTotal(c.id);
         return '<div class="row" data-cust="'+c.id+'"><span class="avatar">'+esc(c.name.trim().charAt(0).toUpperCase()||'?')+'</span><div class="grow"><div class="title">'+esc(c.name)+'</div>'+
-        '<div class="sub">'+esc(c.phone||'')+(c.note?' · '+esc(c.note):'')+'</div></div>'+
-        (t>0?'<span class="money red">Nợ '+fmtMoney(t)+'</span>':'<span class="badge green">Không nợ</span>')+
-        (c.phone?'<a class="btn btn-small tel-btn" href="tel:'+esc(c.phone)+'" data-tel="1" title="Gọi cho khách">📞 Gọi</a>':'')+
-        (t>0?'<button class="btn btn-small btn-primary qp-btn" data-qp="'+c.id+'">Trả nợ</button>':'')+'</div>';}).join('')+'</div>';
+        '<div class="sub">'+esc(c.phone||'')+(c.note?' · '+esc(c.note):'')+'</div>'+
+        '<div class="money-line">'+(t>0?'<span class="money red">Nợ '+fmtMoney(t)+'</span>':'<span class="badge green">Không nợ</span>')+'</div></div>'+
+        ((c.phone||t>0)?'<div class="row-actions">'+(c.phone?'<a class="btn btn-small tel-btn" href="tel:'+esc(c.phone)+'" data-tel="1" title="Gọi cho khách">📞 Gọi</a>':'')+
+        (t>0?'<button class="btn btn-small btn-primary qp-btn" data-qp="'+c.id+'">Trả nợ</button>':'')+'</div>':'')+'</div>';}).join('')+'</div>';
   }).join('');
   document.getElementById('customerList').innerHTML=html||'<div class="empty">Chưa có khách hàng nào. Bấm “＋ Thêm khách”.</div>';
   renderDebtStats();
@@ -707,9 +713,9 @@ function renderSuppliers(){
     const invs=DB.invoices.filter(i=>i.supplierId===s.id);
     const rem=invs.reduce((t,i)=>t+invRemain(i),0);
     return '<div class="row" data-sup="'+s.id+'"><span class="dot-ico blue" style="width:44px;height:44px;border-radius:12px">'+ic('i-truck')+'</span><div class="grow"><div class="title">'+esc(s.name)+'</div>'+
-      '<div class="sub">'+esc(s.phone||'')+(s.address?' · '+esc(s.address):'')+' · '+invs.length+' hoá đơn</div></div>'+
-      (rem>0?'<span class="money red">Còn nợ '+fmtMoney(rem)+'</span>':'<span class="badge green">Đã trả hết</span>')+
-      (s.phone?'<a class="btn btn-small tel-btn" href="tel:'+esc(s.phone)+'" data-tel="1" title="Gọi nhà cung cấp">📞 Gọi</a>':'')+'</div>';
+      '<div class="sub">'+esc(s.phone||'')+(s.address?' · '+esc(s.address):'')+' · '+invs.length+' hoá đơn</div>'+
+      '<div class="money-line">'+(rem>0?'<span class="money red">Còn nợ '+fmtMoney(rem)+'</span>':'<span class="badge green">Đã trả hết</span>')+'</div></div>'+
+      (s.phone?'<div class="row-actions"><a class="btn btn-small tel-btn" href="tel:'+esc(s.phone)+'" data-tel="1" title="Gọi nhà cung cấp">📞 Gọi</a></div>':'')+'</div>';
   }).join(''):'<div class="empty">Chưa có nhà cung cấp nào. Bấm “＋ Thêm nhà cung cấp”.</div>';
 }
 document.getElementById('supSearch').addEventListener('input',renderSuppliers);
@@ -1218,7 +1224,12 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    nhiêu tuỳ ý, chặn bớt quá số đang còn).
    v2.5.6 (Cruz: "cho dropdown duyệt theo tháng, quý, năm, tất cả — làm
    khoa học vào"): tổng hợp Thu chi theo kỳ chọn bằng dropdown, 3 thẻ
-   Tổng thu / Tổng chi / Lãi–Lỗ của kỳ đang chọn. */
+   Tổng thu / Tổng chi / Lãi–Lỗ của kỳ đang chọn.
+   v2.5.7 (ảnh iPhone của Cruz: nhiều đoạn vỡ layout): hàng NCC/khách đưa
+   tiền nợ thành dòng riêng trong cột chữ + nút gom cột phải, tên/ghi chú
+   1 dòng có ellipsis (WebKit từng co cột chữ dưới cả số ĐT -> chữ đè tiền);
+   danger-zone mobile xếp nút gọn. THÊM chip gợi ý tiền nhanh (10k–1tr)
+   dưới mọi ô nhập tiền trong modal. */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};

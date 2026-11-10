@@ -423,3 +423,21 @@ html[data-theme="dark"] .hero{background:linear-gradient(125deg,#143f36,#1a5146 
 .cash-period .input{width:auto}
 .cash-period input[type="month"]{min-height:40px}
 .cash-period .cp-name{margin-left:auto;font-size:14.5px}
+
+/* v2.5.7: sửa vỡ layout trên iPhone (WebKit co cột chữ dưới cả số điện thoại
+   không ngắt được -> chữ đè lên tiền; tên không có nowrap nên cắt giữa từ).
+   Tiền nợ chuyển thành 1 dòng riêng TRONG cột chữ; nút bấm gom 1 cột phải. */
+.row .title{white-space:nowrap}
+.row .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row>.money,.row>.btn{flex:none}
+.row .money-line{margin-top:3px}
+.row-actions{display:flex;flex-direction:column;gap:6px;flex:none}
+.row-actions .btn{white-space:nowrap;text-align:center}
+@media(max-width:719.5px){
+  .danger-zone>span{flex:1 1 100%}
+  .danger-zone .btn{flex:1}
+  .danger-zone .danger-btn{margin-left:0;flex:1 1 100%}
+}
+.mq-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.mq{border:1px solid var(--line);background:var(--surface2);color:var(--text);border-radius:999px;padding:5px 10px;font-size:12.5px;cursor:pointer}
+.mq:active{transform:scale(.96)}
