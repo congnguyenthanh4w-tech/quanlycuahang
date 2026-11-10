@@ -795,21 +795,35 @@ function payInvoiceForm(inv,back){
 /* ---------- THU CHI ---------- */
 const THU_TYPES=['Khách trả nợ','Thu tiền khác','Khoản thu bổ sung'];
 const CHI_TYPES=['Thanh toán nhà cung cấp','Chi phí điện nước','Chi phí vận chuyển','Chi phí cửa hàng','Khoản chi khác'];
+/* v2.5.6: tổng hợp thu chi theo KỲ chọn bằng dropdown (Tháng / Quý / Năm /
+   Tất cả) — thay 6 thẻ cố định của v2.5.4 cho khoa học, gọn mắt. */
+let cpType='month',cpMonth=todayISO().slice(0,7),cpQuarter=Math.floor(Number(todayISO().slice(5,7))/3.01)+1,cpYear=todayISO().slice(0,4);
+function cashPeriodRange(){
+  if(cpType==='month')return{label:'Tháng '+Number(cpMonth.slice(5,7))+'/'+cpMonth.slice(0,4),test:d=>d.startsWith(cpMonth)};
+  if(cpType==='quarter'){const ms=[0,1,2].map(i=>cpYear+'-'+String((cpQuarter-1)*3+1+i).padStart(2,'0'));return{label:'Quý '+cpQuarter+'/'+cpYear,test:d=>ms.some(m=>d.startsWith(m))};}
+  if(cpType==='year')return{label:'Năm '+cpYear,test:d=>d.startsWith(cpYear)};
+  return{label:'Tất cả thời gian',test:()=>true};
+}
 function renderCash(){
-  const t=todayISO();
   const sum=(kind,pred)=>DB.cash.filter(c=>c.kind===kind&&pred(c)).reduce((s,c)=>s+(Number(c.amount)||0),0);
-  /* v2.5.4: thêm LÃI/LỖ = Thu − Chi (tháng này + tổng thể) — trước đây chỉ có
-     thu/chi rời, không thấy lời lãi bao nhiêu (Cruz yêu cầu 2026-11-10). */
-  const mThu=sum('thu',c=>String(c.datetime).startsWith(t.slice(0,7))),mChi=sum('chi',c=>String(c.datetime).startsWith(t.slice(0,7))),mNet=mThu-mChi;
-  const aThu=sum('thu',()=>true),aChi=sum('chi',()=>true),aNet=aThu-aChi;
-  const netCard=(label,net)=>statCard('i-coins',net>=0?'green':'chi',label+(net>=0?'':' (lỗ)'),fmtMoney(Math.abs(net)),net>=0?'green':'red');
+  const years=[...new Set(DB.cash.map(c=>String(c.datetime).slice(0,4)).filter(y=>/^\d{4}$/.test(y)).concat([todayISO().slice(0,4)]))].sort().reverse();
+  const cpEl=document.getElementById('cashPeriod');
+  if(cpEl){
+    let second='';
+    if(cpType==='month')second='<input type="month" id="cpMonth" class="input" value="'+cpMonth+'">';
+    else if(cpType==='quarter')second='<select id="cpQuarter" class="input">'+[1,2,3,4].map(q=>'<option value="'+q+'"'+(cpQuarter===q?' selected':'')+'>Quý '+q+'</option>').join('')+'</select>'+
+      '<select id="cpYearQ" class="input">'+years.map(y=>'<option'+(cpYear===y?' selected':'')+'>'+y+'</option>').join('')+'</select>';
+    else if(cpType==='year')second='<select id="cpYear" class="input">'+years.map(y=>'<option'+(cpYear===y?' selected':'')+'>'+y+'</option>').join('')+'</select>';
+    cpEl.innerHTML='<span class="cp-label">Tổng hợp theo:</span>'+
+      '<select id="cpType" class="input"><option value="month"'+(cpType==='month'?' selected':'')+'>Tháng</option><option value="quarter"'+(cpType==='quarter'?' selected':'')+'>Quý</option><option value="year"'+(cpType==='year'?' selected':'')+'>Năm</option><option value="all"'+(cpType==='all'?' selected':'')+'>Tất cả</option></select>'+
+      second+'<b class="cp-name">'+cashPeriodRange().label+'</b>';
+  }
+  const rng=cashPeriodRange();
+  const pThu=sum('thu',c=>rng.test(String(c.datetime))),pChi=sum('chi',c=>rng.test(String(c.datetime))),pNet=pThu-pChi;
   document.getElementById('cashCards').innerHTML=
-    statCard('i-in','green','Thu tháng này',fmtMoney(mThu),'green')+
-    statCard('i-out','','Chi tháng này',fmtMoney(mChi))+
-    netCard('Lãi tháng này',mNet)+
-    statCard('i-in','green','Tổng thu (tất cả)',fmtMoney(aThu),'green')+
-    statCard('i-out','','Tổng chi (tất cả)',fmtMoney(aChi))+
-    netCard('Tổng lãi (tất cả)',aNet);
+    statCard('i-in','green','Tổng thu',fmtMoney(pThu),'green')+
+    statCard('i-out','','Tổng chi',fmtMoney(pChi))+
+    statCard('i-coins',pNet>=0?'green':'chi',pNet>=0?'Lãi':'Lỗ',fmtMoney(Math.abs(pNet)),pNet>=0?'green':'red');
   const f=document.getElementById('cashFilter').value,from=document.getElementById('cashFrom').value,to=document.getElementById('cashTo').value;
   const list=DB.cash.filter(c=>(!f||c.kind===f)&&(!from||String(c.datetime).slice(0,10)>=from)&&(!to||String(c.datetime).slice(0,10)<=to))
     .slice().sort((a,b)=>String(b.datetime).localeCompare(String(a.datetime)));
@@ -826,6 +840,15 @@ function renderCash(){
     :'<div class="empty">Chưa có giao dịch thu chi nào trong khoảng này.</div>';
 }
 ['cashFilter','cashFrom','cashTo'].forEach(id=>document.getElementById(id).addEventListener('change',renderCash));
+document.getElementById('cashPeriod').addEventListener('change',e=>{
+  const id=e.target.id;
+  if(id==='cpType')cpType=e.target.value;
+  else if(id==='cpMonth'){if(e.target.value)cpMonth=e.target.value;else return;}
+  else if(id==='cpQuarter')cpQuarter=Number(e.target.value);
+  else if(id==='cpYearQ'||id==='cpYear')cpYear=e.target.value;
+  else return;
+  renderCash();
+});
 document.getElementById('cashList').addEventListener('click',e=>{const b=e.target.closest('[data-cashdel]');
   if(b&&confirm('Xoá giao dịch này?')){armUndo();DB.cash=DB.cash.filter(c=>c.id!==b.dataset.cashdel);save();renderAll();toastUndo('Đã xoá giao dịch.');}});
 document.getElementById('btnAddCash').onclick=()=>{
@@ -1192,7 +1215,10 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    Thu − Chi theo tháng này và tổng thể (thẻ riêng, lỗ thì đỏ + ghi "(lỗ)"),
    kèm dòng tổng hợp theo đúng khoảng ngày đang lọc.
    v2.5.5: nút "Bớt 1" ở lô hàng → form nhập số lượng cần bớt (bớt bao
-   nhiêu tuỳ ý, chặn bớt quá số đang còn). */
+   nhiêu tuỳ ý, chặn bớt quá số đang còn).
+   v2.5.6 (Cruz: "cho dropdown duyệt theo tháng, quý, năm, tất cả — làm
+   khoa học vào"): tổng hợp Thu chi theo kỳ chọn bằng dropdown, 3 thẻ
+   Tổng thu / Tổng chi / Lãi–Lỗ của kỳ đang chọn. */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};

@@ -416,3 +416,10 @@ html[data-theme="dark"] .hero{background:linear-gradient(125deg,#143f36,#1a5146 
 /* v2.5.4: dòng tổng hợp theo khoảng lọc ở mục Thu chi */
 .cash-sum{font-size:13.5px;color:var(--muted);padding:2px 2px 10px}
 .cash-sum:empty{padding:0}
+
+/* v2.5.6: hàng chọn kỳ tổng hợp ở mục Thu chi */
+.cash-period{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.cash-period .cp-label{color:var(--muted);font-size:13.5px}
+.cash-period .input{width:auto}
+.cash-period input[type="month"]{min-height:40px}
+.cash-period .cp-name{margin-left:auto;font-size:14.5px}
