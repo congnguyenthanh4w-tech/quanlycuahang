@@ -303,6 +303,17 @@ a.btn{text-decoration:none;color:inherit}
 .lock-card input:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
 .lock-btn{width:100%;margin-top:8px}
 .pin-err{color:var(--danger);font-size:14px;min-height:20px;margin-top:6px}
+.gate-card{max-width:390px}
+.gate-card input{text-align:left;font-size:16px;letter-spacing:normal;background:var(--bg)}
+.gate-card .field{margin-bottom:10px}
+.gate-card .field label{text-align:left}
+.gate-sep{display:flex;align-items:center;gap:10px;margin:16px 0 12px;color:var(--muted);font-size:13px}
+.gate-sep::before,.gate-sep::after{content:'';flex:1;height:1px;background:var(--line)}
+.gate-actions{display:flex;gap:8px;margin-top:4px}
+.gate-actions .btn{flex:1}
+.gate-status{color:var(--muted);font-size:13.5px;margin:12px 0 0;min-height:18px}
+.gate-note{color:var(--muted);font-size:13px;line-height:1.55;margin:12px 0 0;text-align:left}
+#gateReload{margin-top:10px}
 .shake{animation:shake .35s ease}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
 

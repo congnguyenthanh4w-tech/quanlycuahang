@@ -715,13 +715,36 @@ async function hashPin(pin,salt){const txt=salt+'|'+pin;
 async function setPin(pin){const salt=uid()+Date.now().toString(36);localStorage.setItem(PIN_KEY,JSON.stringify({salt:salt,hash:await hashPin(pin,salt)}));}
 async function verifyPin(pin){const r=pinRec();if(!r)return false;return (await hashPin(pin,r.salt))===r.hash;}
 function updatePinState(){const el=document.getElementById('pinState');if(el)el.textContent=hasPin()?'🔐 Đã bật mã PIN':'🔓 Chưa đặt mã PIN';}
-function showLock(){const ls=document.getElementById('lockScreen');if(!ls)return;ls.classList.remove('hidden');
-  setTimeout(()=>{const i=document.getElementById('lockPin');if(i)i.focus();},80);}
-function hideLock(){const ls=document.getElementById('lockScreen');if(ls)ls.classList.add('hidden');}
-document.getElementById('lockForm').addEventListener('submit',async e=>{e.preventDefault();
-  const inp=document.getElementById('lockPin'),err=document.getElementById('lockErr');
-  if(await verifyPin(inp.value.trim())){inp.value='';err.textContent='';hideLock();toast('Đã mở khoá.');}
-  else{err.textContent='Sai mã PIN, thử lại.';inp.value='';const card=document.getElementById('lockForm');card.classList.remove('shake');void card.offsetWidth;card.classList.add('shake');}});
+/* ---------- CỔNG ĐĂNG NHẬP (v2.2 — thay màn hình PIN khi mở app) ----------
+   Mở app: chưa đăng nhập thì hiện cổng đăng nhập toàn màn hình; đã ghi nhớ
+   phiên thì Firebase trả user ngay và cổng tự ẩn. PIN từ v2.2 chỉ còn dùng
+   để xác nhận khi xoá toàn bộ / khôi phục dữ liệu (requirePin). */
+function gateEl(id){return document.getElementById(id);}
+function showGate(){const g=gateEl('loginGate');if(g)g.classList.remove('hidden');}
+function hideGate(){const g=gateEl('loginGate');if(g)g.classList.add('hidden');}
+function gateStatus(t){const s=gateEl('gateStatus');if(s)s.textContent=t||'';}
+function gateErrShow(m){const e=gateEl('gateErr');if(e)e.textContent=m||'';}
+function gateReady(){showGate();
+  ['gateGoogle','gateEmail','gatePass','gateLogin','gateReg'].forEach(id=>{const el=gateEl(id);if(el)el.disabled=false;});
+  gateStatus('');if(_gateErr){gateErrShow(_gateErr);_gateErr='';}
+  const em=gateEl('gateEmail');if(em)setTimeout(()=>em.focus(),80);}
+function gateFatal(msg){showGate();gateStatus(msg);const r=gateEl('gateReload');if(r)r.classList.remove('hidden');}
+(function(){
+  const ua=navigator.userAgent||'';
+  if(/Zalo|FBAN|FBAV|FB_IAB|Messenger|Instagram|Line\//i.test(ua)){const w=gateEl('gateWebview');if(w)w.classList.remove('hidden');}
+  const rl=gateEl('gateReload');if(rl)rl.onclick=()=>location.reload();
+  const gg=gateEl('gateGoogle');if(gg)gg.onclick=()=>{gateErrShow('');googleSignIn(m=>gateErrShow(m));};
+  const gf=gateEl('gateForm');if(gf)gf.addEventListener('submit',async e=>{e.preventDefault();
+    const email=gateEl('gateEmail').value.trim(),pass=gateEl('gatePass').value;
+    if(!email||!pass)return gateErrShow('Hãy nhập email và mật khẩu.');
+    try{await firebase.auth().signInWithEmailAndPassword(email,pass);toast('Đã đăng nhập — đang nối dữ liệu cửa hàng…');}
+    catch(e2){gateErrShow(AUTH_ERR[e2.code]||('Không đăng nhập được: '+e2.message));}});
+  const gr=gateEl('gateReg');if(gr)gr.onclick=async()=>{
+    const email=gateEl('gateEmail').value.trim(),pass=gateEl('gatePass').value;
+    if(!email||!pass)return gateErrShow('Hãy nhập email và mật khẩu để tạo tài khoản.');
+    try{await firebase.auth().createUserWithEmailAndPassword(email,pass);toast('Đã tạo tài khoản — đang nối dữ liệu cửa hàng…');}
+    catch(e2){gateErrShow(AUTH_ERR[e2.code]||('Không đăng ký được: '+e2.message));}};
+})();
 function requirePin(title,cb){
   if(!hasPin()){cb();return;}
   openModal('<h3>🔐 '+esc(title)+'</h3><form id="fPin">'+
@@ -739,7 +762,7 @@ function pinSetForm(title){
     '<div class="field"><label>Mã PIN mới (6 chữ số)</label><input id="pinNew" type="password" inputmode="numeric" autocomplete="off" maxlength="6" required></div>'+
     '<div class="field"><label>Nhập lại mã PIN</label><input id="pinNew2" type="password" inputmode="numeric" autocomplete="off" maxlength="6" required></div>'+
     '<div class="pin-err" id="pinSetErr"></div>'+
-    '<p class="sub">PIN chỉ lưu trên thiết bị này để khoá app. Quên PIN thì không mở lại được app — hãy nhớ kỹ và sao lưu dữ liệu thường xuyên.</p>'+
+    '<p class="sub">PIN chỉ lưu trên thiết bị này, dùng để xác nhận khi XOÁ TOÀN BỘ dữ liệu hoặc KHÔI PHỤC dữ liệu. Quên PIN thì không xoá / khôi phục được — hãy nhớ kỹ. (Mở app nay dùng màn hình đăng nhập tài khoản.)</p>'+
     '<div class="actions"><button type="button" class="btn" id="pinSetCancel">Huỷ</button><button type="submit" class="btn btn-primary">Lưu mã PIN</button></div></form>');
   document.getElementById('pinSetCancel').onclick=closeModal;
   setTimeout(()=>{const i=document.getElementById('pinNew');if(i)i.focus();},70);
@@ -747,17 +770,15 @@ function pinSetForm(title){
     const a=document.getElementById('pinNew').value.trim(),b=document.getElementById('pinNew2').value.trim(),err=document.getElementById('pinSetErr');
     if(!/^\d{6}$/.test(a)){err.textContent='PIN phải gồm đúng 6 chữ số.';return;}
     if(a!==b){err.textContent='Hai lần nhập chưa khớp.';return;}
-    await setPin(a);closeModal();updatePinState();toast('Đã đặt mã PIN — từ lần mở app sau sẽ hỏi PIN.');};
+    await setPin(a);closeModal();updatePinState();toast('Đã đặt mã PIN bảo vệ.');};
 }
 function pinSettings(){
-  if(!hasPin()){pinSetForm('Đặt mã PIN khoá app');return;}
-  openModal('<h3>🔐 Mã PIN & khoá app</h3>'+
+  if(!hasPin()){pinSetForm('Đặt mã PIN bảo vệ');return;}
+  openModal('<h3>🔐 Mã PIN bảo vệ</h3>'+
     '<div class="actions" style="flex-direction:column;align-items:stretch">'+
-    '<button class="btn" id="pinLockNow">🔒 Khoá app ngay</button>'+
     '<button class="btn" id="pinChange">Đổi mã PIN</button>'+
     '<button class="btn" id="pinOff" style="color:var(--danger)">Tắt mã PIN</button></div>'+
-    '<p class="sub">Khi đã đặt PIN: mở app phải nhập PIN; xoá toàn bộ dữ liệu và khôi phục dữ liệu cũng phải nhập lại PIN.</p>');
-  document.getElementById('pinLockNow').onclick=()=>{closeModal();showLock();};
+    '<p class="sub">Mã PIN dùng để xác nhận khi XOÁ TOÀN BỘ dữ liệu và KHÔI PHỤC dữ liệu. Mở app nay dùng màn hình đăng nhập tài khoản — muốn khoá app thì bấm Đăng xuất trong mục Tài khoản & đồng bộ.</p>');
   document.getElementById('pinChange').onclick=()=>requirePin('Đổi mã PIN',()=>pinSetForm('Đổi mã PIN'));
   document.getElementById('pinOff').onclick=()=>requirePin('Tắt mã PIN',()=>{localStorage.removeItem(PIN_KEY);closeModal();updatePinState();toast('Đã tắt mã PIN.');});
 }
@@ -768,7 +789,6 @@ function renderAll(){renderDashboard();renderProducts();renderDebts();renderSupp
 window.__qlch={get DB(){return DB;},renderAll,buildXlsxBlob,buildSheets,exportExcel};
 renderAll();
 updatePinState();
-if(hasPin())showLock();
 if(!localStorage.getItem('qlch_started'))localStorage.setItem('qlch_started','1');
 /* ---------- sidebar (desktop) ---------- */
 document.getElementById('sideNav').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(b)switchTab(b.dataset.tab);});
@@ -960,7 +980,7 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    Đăng nhập Google hoặc email/mật khẩu. Người đầu tiên đăng nhập (chưa thuộc
    cửa hàng nào, chưa được mời) trở thành CHỦ cửa hàng; chủ mời thêm người
    bằng email — người được mời đăng nhập bằng đúng email đó sẽ vào cùng cửa hàng.
-   Chưa đăng nhập/mất mạng: app vẫn chạy bằng localStorage như cũ. */
+   v2.2: mở app là CỔNG ĐĂNG NHẬP (thay màn hình PIN); Google dùng redirect. */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"quanlycuahang-1aa8a.firebaseapp.com",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
@@ -979,9 +999,11 @@ function updateSyncState(){
 }
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
 function stateRef(){return firebase.firestore().doc('stores/'+_sync.storeId+'/state/main');}
+let _authResolved=false,_gateErr='';
 async function initSync(){
   updateSyncState();
-  if(!FB_CONFIG)return;
+  if(!FB_CONFIG){gateFatal('Bản app này chưa bật đăng nhập bằng tài khoản.');return;}
+  const slowTimer=setTimeout(()=>{if(!_authResolved){gateStatus('Kết nối hơi chậm… hãy kiểm tra mạng, hoặc tải lại trang.');const r=document.getElementById('gateReload');if(r)r.classList.remove('hidden');}},15000);
   try{
     const base='https://www.gstatic.com/firebasejs/10.12.2/';
     await loadScript(base+'firebase-app-compat.js');
@@ -989,15 +1011,20 @@ async function initSync(){
     await loadScript(base+'firebase-firestore-compat.js');
     firebase.initializeApp(FB_CONFIG);
     try{await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);}catch(e){}
-    firebase.auth().getRedirectResult().catch(()=>{});
+    try{await firebase.auth().getRedirectResult();}
+    catch(e){_gateErr=AUTH_ERR[e.code]||('Đăng nhập Google chưa thành công — thử lại. ('+(e.code||'')+')');}
     _fbReady=true;
     firebase.auth().onAuthStateChanged(async user=>{
+      _authResolved=true;clearTimeout(slowTimer);
       if(_unsubState){_unsubState();_unsubState=null;}
       if(_unsubMeta){_unsubMeta();_unsubMeta=null;}
-      if(user){_sync.uid=user.uid;_sync.email=user.email||'';syncSaveMeta();updateSyncState();await bindStore(user);}
-      else{_sync.uid='';_sync.email='';_sync.storeId='';_sync.isOwner=false;_sync.ownerEmail='';_sync.memberEmails=[];syncSaveMeta();updateSyncState();}
+      if(user){try{sessionStorage.removeItem('qlch_gredir');}catch(e){}
+        _sync.uid=user.uid;_sync.email=user.email||'';syncSaveMeta();updateSyncState();hideGate();await bindStore(user);}
+      else{_sync.uid='';_sync.email='';_sync.storeId='';_sync.isOwner=false;_sync.ownerEmail='';_sync.memberEmails=[];syncSaveMeta();updateSyncState();
+        if(!_gateErr){try{if(sessionStorage.getItem('qlch_gredir'))_gateErr='Đăng nhập Google chưa hoàn tất — có thể trình duyệt đã chặn. Hãy mở link app bằng Chrome/Safari rồi thử lại.';sessionStorage.removeItem('qlch_gredir');}catch(e){}}
+        gateReady();}
     });
-  }catch(e){/* Không tải được Firebase (mất mạng…) → chạy local như cũ */}
+  }catch(e){clearTimeout(slowTimer);gateFatal('Không tải được phần đăng nhập — kiểm tra kết nối mạng rồi tải lại trang.');}
 }
 async function bindStore(user){
   const fs=firebase.firestore();
@@ -1082,7 +1109,16 @@ async function removeMember(email){
   await fs.doc('stores/'+_sync.storeId).update({memberEmails:firebase.firestore.FieldValue.arrayRemove(email)});
   await fs.doc('invites/'+email).set({stores:firebase.firestore.FieldValue.arrayRemove(_sync.storeId)},{merge:true});
 }
-const AUTH_ERR={'auth/invalid-email':'Email chưa đúng định dạng.','auth/user-not-found':'Chưa có tài khoản với email này — bấm "Đăng ký tài khoản mới".','auth/wrong-password':'Sai mật khẩu.','auth/invalid-credential':'Email hoặc mật khẩu chưa đúng.','auth/email-already-in-use':'Email này đã có tài khoản — hãy bấm "Đăng nhập".','auth/weak-password':'Mật khẩu phải từ 6 ký tự trở lên.','auth/network-request-failed':'Lỗi mạng — kiểm tra kết nối rồi thử lại.','auth/too-many-requests':'Thử sai quá nhiều lần — đợi ít phút rồi thử lại.','auth/unauthorized-domain':'Tên miền này chưa được phép đăng nhập — báo người cài đặt app.','auth/operation-not-allowed':'Cách đăng nhập này chưa được bật — báo người cài đặt app.'};
+const AUTH_ERR={'auth/invalid-email':'Email chưa đúng định dạng.','auth/user-not-found':'Chưa có tài khoản với email này — bấm "Đăng ký tài khoản mới".','auth/wrong-password':'Sai mật khẩu.','auth/invalid-credential':'Email hoặc mật khẩu chưa đúng.','auth/email-already-in-use':'Email này đã có tài khoản — hãy bấm "Đăng nhập".','auth/weak-password':'Mật khẩu phải từ 6 ký tự trở lên.','auth/network-request-failed':'Lỗi mạng — kiểm tra kết nối rồi thử lại.','auth/too-many-requests':'Thử sai quá nhiều lần — đợi ít phút rồi thử lại.','auth/unauthorized-domain':'Tên miền này chưa được phép đăng nhập — báo người cài đặt app.','auth/operation-not-allowed':'Cách đăng nhập này chưa được bật — báo người cài đặt app.','auth/operation-not-supported-in-this-environment':'Trình duyệt này không hỗ trợ đăng nhập Google (hay gặp khi mở app trong Zalo/Facebook). Hãy mở link app bằng Chrome hoặc Safari rồi thử lại.','auth/web-storage-unsupported':'Trình duyệt đang chặn lưu trữ — tắt chế độ riêng tư / cho phép cookie rồi thử lại.','auth/internal-error':'Máy chủ đăng nhập đang bận — thử lại sau ít phút.','auth/account-exists-with-different-credential':'Email này đã đăng ký bằng mật khẩu — hãy đăng nhập bằng email + mật khẩu.'};
+/* Đăng nhập Google LUÔN dùng redirect (không dùng popup): trên Chrome điện
+   thoại, popup bị chặn cookie bên thứ ba nên đăng nhập xong vẫn quay về
+   "chưa đăng nhập" — redirect là cách Firebase khuyên dùng cho mobile. */
+async function googleSignIn(errCb){
+  try{try{sessionStorage.setItem('qlch_gredir','1');}catch(e){}
+    await firebase.auth().signInWithRedirect(new firebase.auth.GoogleAuthProvider());
+  }catch(e){try{sessionStorage.removeItem('qlch_gredir');}catch(e2){}
+    errCb(AUTH_ERR[e.code]||('Không đăng nhập Google được: '+e.message));}
+}
 function accountModal(){
   if(!FB_CONFIG){openModal('<h2>Tài khoản & đồng bộ</h2><p class="acc-note">Bản app này chưa bật đồng bộ server.</p>');return;}
   if(!_fbReady){openModal('<h2>Tài khoản & đồng bộ</h2><p class="acc-note">Đang kết nối server… đợi vài giây rồi mở lại mục này. Nếu đang mất mạng, app vẫn dùng dữ liệu trên máy bình thường.</p>');return;}
@@ -1097,16 +1133,7 @@ function accountModal(){
     +'<div class="acc-actions"><button class="btn" id="accLogin">Đăng nhập</button><button class="btn" id="accReg">Đăng ký tài khoản mới</button></div>');
     const err=m=>{const e=document.getElementById('accErr');e.textContent=m;e.classList.remove('hidden');};
     const cred=()=>({email:document.getElementById('accEmail').value.trim(),pass:document.getElementById('accPass').value});
-    document.getElementById('accGoogle').onclick=async()=>{
-      try{
-        const prov=new firebase.auth.GoogleAuthProvider();
-        await firebase.auth().signInWithPopup(prov);
-        closeModal();toast('Đã đăng nhập — đang nối dữ liệu cửa hàng…');
-      }catch(e){
-        if(['auth/popup-blocked','auth/popup-closed-by-user','auth/cancelled-popup-request'].includes(e.code)){
-          try{await firebase.auth().signInWithRedirect(new firebase.auth.GoogleAuthProvider());}catch(e2){err(AUTH_ERR[e2.code]||('Không đăng nhập Google được: '+e2.message));}
-        }else err(AUTH_ERR[e.code]||('Không đăng nhập Google được: '+e.message));
-      }};
+    document.getElementById('accGoogle').onclick=()=>{googleSignIn(err);};
     document.getElementById('accLogin').onclick=async()=>{const c=cred();if(!c.email||!c.pass)return err('Hãy nhập email và mật khẩu.');try{await firebase.auth().signInWithEmailAndPassword(c.email,c.pass);closeModal();toast('Đã đăng nhập — đang nối dữ liệu cửa hàng…');}catch(e){err(AUTH_ERR[e.code]||('Không đăng nhập được: '+e.message));}};
     document.getElementById('accReg').onclick=async()=>{const c=cred();if(!c.email||!c.pass)return err('Hãy nhập email và mật khẩu.');try{await firebase.auth().createUserWithEmailAndPassword(c.email,c.pass);closeModal();toast('Đã tạo tài khoản — đang nối dữ liệu cửa hàng…');}catch(e){err(AUTH_ERR[e.code]||('Không đăng ký được: '+e.message));}};
   }else{

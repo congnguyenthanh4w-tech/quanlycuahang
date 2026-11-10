@@ -50,7 +50,7 @@
       <button class="btn btn-ghost js-excel">📊 Xuất báo cáo Excel</button>
       <button class="btn btn-ghost js-export">⬇ Sao lưu dữ liệu</button>
       <label class="btn btn-ghost file-btn">⬆ Khôi phục dữ liệu<input class="js-import" type="file" accept="application/json" hidden></label>
-      <button class="btn btn-ghost js-pin">🔐 Mã PIN & khoá app</button>
+      <button class="btn btn-ghost js-pin">🔐 Mã PIN bảo vệ</button>
       <button class="btn btn-ghost js-account">☁️ Tài khoản & đồng bộ</button>
       <button class="btn btn-ghost js-wipe wipe-btn">🗑 Xoá toàn bộ dữ liệu</button>
       <small class="side-note sync-state">Dữ liệu đang lưu trên thiết bị này.</small>
@@ -170,21 +170,33 @@
       </section>
     </main>
 
-    <div class="danger-zone"><span id="pinState">🔐 Bảo mật & dọn dữ liệu</span><span class="sync-state"></span><button class="btn js-account">Tài khoản & đồng bộ</button><button class="btn js-pin">Mã PIN & khoá app</button><button class="btn danger-btn js-wipe">Xoá toàn bộ dữ liệu</button></div>
-    <footer class="foot">Dữ liệu được lưu trên thiết bị này — nhớ bấm <b>Sao lưu</b> thường xuyên. Bản đồng bộ nhiều máy sẽ nối khi triển khai chính thức.</footer>
+    <div class="danger-zone"><span id="pinState">🔐 Bảo mật & dọn dữ liệu</span><span class="sync-state"></span><button class="btn js-account">Tài khoản & đồng bộ</button><button class="btn js-pin">Mã PIN bảo vệ</button><button class="btn danger-btn js-wipe">Xoá toàn bộ dữ liệu</button></div>
+    <footer class="foot">Dữ liệu đồng bộ theo tài khoản bạn đăng nhập — nhớ bấm <b>Sao lưu</b> thường xuyên để giữ một bản dự phòng.</footer>
   </div>
 </div>
 
 <div id="modalWrap" class="modal-wrap hidden"><div class="modal" id="modalBox"></div></div>
-<div id="lockScreen" class="lock-screen hidden">
-  <form id="lockForm" class="lock-card">
+<div id="loginGate" class="lock-screen">
+  <div class="lock-card gate-card">
     <div class="lock-mark"><svg class="ic ic-lg"><use href="#i-store"/></svg></div>
     <h2>Quản Lý Cửa Hàng</h2>
-    <p class="lock-sub">Nhập mã PIN để mở app</p>
-    <input id="lockPin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="••••••">
-    <div class="pin-err" id="lockErr"></div>
-    <button type="submit" class="btn btn-primary lock-btn">🔓 Mở khoá</button>
-  </form>
+    <p class="lock-sub">Đăng nhập để vào cửa hàng của bạn.<br>Đăng nhập một lần — app tự ghi nhớ trên máy này.</p>
+    <button type="button" class="btn btn-primary lock-btn" id="gateGoogle" disabled>Đăng nhập bằng Google</button>
+    <div class="gate-sep"><span>hoặc dùng email + mật khẩu</span></div>
+    <form id="gateForm">
+      <div class="field"><label>Email</label><input id="gateEmail" type="email" autocomplete="username" placeholder="vidu@gmail.com" disabled></div>
+      <div class="field"><label>Mật khẩu</label><input id="gatePass" type="password" autocomplete="current-password" placeholder="Ít nhất 6 ký tự" disabled></div>
+      <div class="pin-err" id="gateErr"></div>
+      <div class="gate-actions">
+        <button type="submit" class="btn btn-primary" id="gateLogin" disabled>Đăng nhập</button>
+        <button type="button" class="btn" id="gateReg" disabled>Đăng ký tài khoản mới</button>
+      </div>
+    </form>
+    <p class="gate-status" id="gateStatus">Đang kết nối…</p>
+    <p class="gate-note">Chưa có tài khoản? Bấm <b>Đăng nhập bằng Google</b> hoặc <b>Đăng ký tài khoản mới</b> để tự tạo.<br>Đã được admin cấp tài khoản? Nhập email + mật khẩu được cấp rồi bấm <b>Đăng nhập</b>.</p>
+    <p class="gate-note hidden" id="gateWebview">⚠️ Bạn đang mở app trong trình duyệt của Zalo/Facebook — đăng nhập Google có thể không thành công. Hãy bấm dấu ⋮ ở góc màn hình và chọn <b>Mở bằng Chrome / trình duyệt</b> rồi đăng nhập lại.</p>
+    <button type="button" class="btn btn-ghost hidden" id="gateReload">↻ Tải lại trang</button>
+  </div>
 </div>
 <video id="scanVideo" class="hidden" playsinline></video>
 <div id="toast" class="toast hidden"></div>
