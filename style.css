@@ -458,3 +458,12 @@ html[data-theme="dark"] .hero{background:linear-gradient(125deg,#143f36,#1a5146 
    trang tổng quan thôi là đủ, đừng hiện mọi tab): bỏ căn lề kiểu chân
    trang cũ, để nó thẳng hàng với các khối của Tổng quan */
 .danger-zone{margin:22px 0 4px;width:auto;max-width:none}
+
+/* v2.6.2 — thumbnail ảnh đính kèm + trình xem ảnh lớn toàn màn hình */
+.thumb-media{width:84px;height:84px;object-fit:cover;border-radius:10px;border:1px solid var(--line);cursor:pointer;margin-top:6px;background:var(--surface2)}
+img[data-full]{cursor:pointer}
+.media-view{position:fixed;inset:0;background:rgba(8,12,16,.93);z-index:300;display:flex;align-items:center;justify-content:center;padding:16px}
+.media-view.hidden{display:none}
+.media-view .mv-body{display:flex;align-items:center;justify-content:center;max-width:100%}
+.media-view img,.media-view video{max-width:100%;max-height:88dvh;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.mv-close{position:absolute;top:calc(12px + env(safe-area-inset-top));right:14px;width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:#fff;font-size:17px;cursor:pointer}

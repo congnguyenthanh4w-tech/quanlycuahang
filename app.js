@@ -136,6 +136,29 @@ function openModal(html){modalBox.innerHTML='<button class="close-x" id="modalCl
     inp.addEventListener('change',()=>{const f=inp.files&&inp.files[0];nameEl.textContent=f?f.name:'Chưa chọn tệp';});});
   if(!('ontouchstart' in window))setTimeout(()=>{const f=modalBox.querySelector('input:not([type="file"]):not([type="date"]):not([type="datetime-local"]),select,textarea');if(f)f.focus();},70);}
 function closeModal(){_scanCb=null;modalWrap.classList.add('hidden');modalBox.innerHTML='';}
+/* v2.6.2: ảnh đính kèm chỉ hiện THUMBNAIL nhỏ; bấm vào mới xem ảnh lớn
+   toàn màn hình (Cruz yêu cầu) — áp cho ảnh sản phẩm, chứng từ nợ,
+   ảnh hoá đơn, chứng từ thu chi và cả ảnh xem trước trong form. */
+function viewMedia(src){
+  if(!src)return;
+  let ov=document.getElementById('mediaView');
+  if(!ov){ov=document.createElement('div');ov.id='mediaView';ov.className='media-view hidden';
+    ov.innerHTML='<button type="button" class="mv-close" aria-label="Đóng">✕</button><div class="mv-body"></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click',()=>{ov.classList.add('hidden');ov.querySelector('.mv-body').innerHTML='';});}
+  ov.querySelector('.mv-body').innerHTML=String(src).startsWith('data:video')
+    ?'<video src="'+src+'" controls autoplay playsinline></video>'
+    :'<img src="'+src+'" alt="">';
+  ov.classList.remove('hidden');
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-full],.tap-view');
+  if(!t)return;
+  const src=t.classList.contains('tap-view')?(t.currentSrc||t.src):(t.getAttribute('src')||'');
+  if(!src)return;
+  e.stopPropagation();e.preventDefault();
+  viewMedia(src);
+},true);
 modalWrap.addEventListener('click',e=>{if(e.target===modalWrap)closeModal();});
 function field(label,inner){return '<div class="field"><label>'+label+'</label>'+inner+'</div>';}
 function fileToDataURL(input,cb){
@@ -248,7 +271,7 @@ function renderProducts(){
   document.getElementById('productList').innerHTML=list.length?list.map(p=>{
     const st=stockOf(p),alerts=productAlerts(p);
     return '<div class="row" data-prod="'+p.id+'">'+
-      (p.image?'<img class="thumb" src="'+p.image+'" alt="">':'<span class="dot-ico" style="width:52px;height:52px;border-radius:11px;background:var(--surface2);color:var(--muted)">'+ic('i-box')+'</span>')+
+      (p.image?'<img class="thumb" data-full src="'+p.image+'" alt="" title="Bấm để xem ảnh lớn">':'<span class="dot-ico" style="width:52px;height:52px;border-radius:11px;background:var(--surface2);color:var(--muted)">'+ic('i-box')+'</span>')+
       '<div class="grow"><div class="title">'+esc(p.name)+(p.status==='stopped'?' <span class="badge">Ngừng kinh doanh</span>':'')+'</div>'+
       '<div class="sub">'+esc(p.code||'')+(p.barcode?' · '+esc(p.barcode):'')+' · '+esc(p.group||'')+' · Bán '+fmtMoney(p.sellPrice)+'</div>'+
       alerts.map(a=>'<span class="badge '+((a.kind==='expired'||a.kind==='out')?'red':'amber')+'">'+esc(a.label)+'</span> ').join('')+
@@ -268,7 +291,7 @@ document.getElementById('productList').addEventListener('click',e=>{
 function productForm(p,prefillBarcode){
   p=p||{name:'',code:'',barcode:prefillBarcode||'',group:groups()[0],unit:'Gói',sellPrice:'',threshold:5,warnDays:30,status:'active',image:'',lots:[],priceHistory:[]};
   openModal('<h2>'+(p.id?'Sửa sản phẩm':'Thêm sản phẩm')+'</h2><form id="fProd">'+
-    field('Ảnh sản phẩm (chụp hoặc tải lên)','<input type="file" id="pImage" accept="image/*">'+(p.image?'<img class="preview" id="pPreview" src="'+p.image+'">':'<img class="preview hidden" id="pPreview">'))+
+    field('Ảnh sản phẩm (chụp hoặc tải lên)','<input type="file" id="pImage" accept="image/*">'+(p.image?'<img class="preview tap-view" id="pPreview" src="'+p.image+'" title="Bấm để xem ảnh lớn">':'<img class="preview hidden tap-view" id="pPreview" title="Bấm để xem ảnh lớn">'))+
     field('Tên sản phẩm *','<input id="pName" required value="'+esc(p.name)+'">')+
     '<div class="grid2">'+field('Mã sản phẩm (để trống = tự sinh)','<input id="pCode" value="'+esc(p.code||'')+'" placeholder="VD: HH001">')+
     field('Barcode','<div class="scan-row"><input id="pBarcode" value="'+esc(p.barcode||'')+'" inputmode="numeric" placeholder="Quét hoặc gõ mã"><button type="button" class="btn" id="pScanBtn">Quét</button></div>')+'</div>'+
@@ -368,7 +391,7 @@ function openProduct(id){
   const st=stockOf(p),alerts=productAlerts(p);
   const lots=(p.lots||[]).slice().sort((a,b)=>String(a.expiry||'9999').localeCompare(String(b.expiry||'9999')));
   openModal('<h2>'+esc(p.name)+'</h2>'+
-    (p.image?'<img class="preview" src="'+p.image+'" style="max-width:100%;border-radius:10px">':'')+
+    (p.image?'<img class="thumb-media" data-full src="'+p.image+'" alt="Ảnh sản phẩm" title="Bấm để xem ảnh lớn">':'')+
     '<div class="kv"><span>Mã / Barcode</span><b>'+esc(p.code||'—')+(p.barcode?' · '+esc(p.barcode):'')+'</b></div>'+
     '<div class="kv"><span>Nhóm / Đơn vị</span><b>'+esc(p.group||'')+' · '+esc(p.unit||'')+'</b></div>'+
     '<div class="kv"><span>Giá bán tham khảo</span><b>'+fmtMoney(p.sellPrice)+'</b></div>'+
@@ -653,7 +676,7 @@ function openCustomer(id){
     (debts.length?debts.map(d=>{const rem=debtRemain(d);
       return '<div class="sub-block"><div class="head"><b>'+fmtDT(d.datetime)+'</b><span class="money '+(rem>0?'red':'')+'">'+(rem>0?'Còn '+fmtMoney(rem):'Đã trả hết ✓')+'</span></div>'+
       '<div>'+esc(d.note||'(không ghi chú)')+'</div><div class="sub" style="color:var(--muted);font-size:13px">Tổng nợ: '+fmtMoney(d.total)+' · Đã trả: '+fmtMoney(debtPaid(d))+'</div>'+
-      (d.evidence?(String(d.evidence).startsWith('data:video')?'<video src="'+d.evidence+'" controls style="max-width:100%;border-radius:10px;margin-top:6px"></video>':'<img class="preview" src="'+d.evidence+'" style="max-width:100%;border-radius:10px;margin-top:6px">'):'')+
+      (d.evidence?(String(d.evidence).startsWith('data:video')?'<video class="thumb-media" data-full src="'+d.evidence+'" preload="metadata" muted playsinline title="Bấm để xem lớn"></video>':'<img class="thumb-media" data-full src="'+d.evidence+'" alt="Ảnh chứng từ" title="Bấm để xem ảnh lớn">'):'')+
       (d.payments&&d.payments.length?'<div style="margin-top:6px">'+payHistoryHtml(d)+'</div>':'')+
       '<div class="actions">'+(rem>0?'<button class="btn btn-small btn-primary" data-pay="'+d.id+'">Ghi trả nợ</button>':'')+
       '<button class="btn btn-small btn-danger" data-debtdel="'+d.id+'">Xoá khoản nợ</button></div></div>';}).join('')
@@ -761,7 +784,7 @@ function openSupplier(id){
     (invs.length?invs.map(i=>{const rem=invRemain(i);
       return '<div class="sub-block"><div class="head"><b>Hoá đơn ngày '+fmtDate(i.date)+'</b><span class="money '+(rem>0?'red':'')+'">'+(rem>0?'Còn nợ '+fmtMoney(rem):'Đã trả hết ✓')+'</span></div>'+
       '<div class="sub" style="color:var(--muted);font-size:13px">Tổng: '+fmtMoney(i.total)+' · Đã thanh toán: '+fmtMoney(invPaid(i))+(i.note?' · '+esc(i.note):'')+'</div>'+
-      (i.image?'<img class="preview" src="'+i.image+'" style="max-width:100%;border-radius:10px;margin-top:6px">':'')+
+      (i.image?'<img class="thumb-media" data-full src="'+i.image+'" alt="Ảnh hoá đơn" title="Bấm để xem ảnh lớn">':'')+
       (i.payments&&i.payments.length?'<div style="margin-top:6px">'+payHistoryHtml(i)+'</div>':'')+
       '<div class="actions">'+(rem>0?'<button class="btn btn-small btn-primary" data-invpay="'+i.id+'">Thanh toán</button>':'')+
       '<button class="btn btn-small btn-danger" data-invdel="'+i.id+'">Xoá hoá đơn</button></div></div>';}).join('')
@@ -851,7 +874,7 @@ function renderCash(){
   if(csEl){const fThu=list.filter(c=>c.kind==='thu').reduce((s,c)=>s+(Number(c.amount)||0),0),fChi=list.filter(c=>c.kind==='chi').reduce((s,c)=>s+(Number(c.amount)||0),0),fNet=fThu-fChi;
     csEl.innerHTML=list.length?('Khoảng đang xem: <b>'+list.length+' giao dịch</b> · Thu <b class="money green">'+fmtMoney(fThu)+'</b> · Chi <b class="money red">'+fmtMoney(fChi)+'</b> · '+(fNet>=0?'Lãi <b class="money green">':'Lỗ <b class="money red">')+fmtMoney(Math.abs(fNet))+'</b>'):'';}
   document.getElementById('cashList').innerHTML=list.length?list.map(c=>
-    '<div class="row no-click"><span class="dot-ico '+(c.kind==='thu'?'':'chi')+'" style="width:40px;height:40px;border-radius:11px">'+ic(c.kind==='thu'?'i-in':'i-out')+'</span>'+(c.evidence&&String(c.evidence).startsWith('data:image')?'<img class="thumb" src="'+c.evidence+'" style="width:44px;height:44px" alt="Ảnh chứng từ">':'')+'<div class="grow"><div class="title">'+esc(c.type)+'</div>'+
+    '<div class="row no-click"><span class="dot-ico '+(c.kind==='thu'?'':'chi')+'" style="width:40px;height:40px;border-radius:11px">'+ic(c.kind==='thu'?'i-in':'i-out')+'</span>'+(c.evidence&&String(c.evidence).startsWith('data:image')?'<img class="thumb" data-full src="'+c.evidence+'" style="width:44px;height:44px" alt="Ảnh chứng từ" title="Bấm để xem ảnh lớn">':'')+'<div class="grow"><div class="title">'+esc(c.type)+'</div>'+
     '<div class="sub">'+fmtDT(c.datetime)+(c.content?' · '+esc(c.content):'')+(c.person?' · '+esc(c.person):'')+'</div>'+
     (c.source!=='manual'?'<span class="badge">Tự động từ '+(c.source==='debtPayment'?'công nợ khách':'thanh toán NCC')+' — không sửa tại đây</span>':'')+
     (c.note?'<div class="sub">'+esc(c.note)+'</div>':'')+'</div>'+
@@ -1258,7 +1281,12 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    v2.6.1 (Cruz: dải bảo mật "để ở trang tổng quan thôi đc r"): khối
    Tài khoản & đồng bộ / Mã PIN / Xoá dữ liệu chuyển vào cuối trang
    Tổng quan, không còn hiện ở mọi tab. Kèm bản HUONG-DAN-CO-HINH
-   (hướng dẫn có ảnh chụp màn hình) theo yêu cầu của Cruz. */
+   (hướng dẫn có ảnh chụp màn hình) theo yêu cầu của Cruz.
+   v2.6.2 (Cruz: ảnh đính kèm để nhỏ thôi, bấm vào mới xem ảnh to):
+   mọi ảnh đính kèm — ảnh sản phẩm, chứng từ nợ (ảnh + video), ảnh hoá
+   đơn, chứng từ thu chi, ảnh xem trước trong form — chỉ hiện thumbnail
+   nhỏ (84px ở chi tiết, 44–54px ở danh sách); bấm vào mở trình xem ảnh
+   lớn toàn màn hình (viewMedia), bấm ra ngoài hoặc ✕ để đóng. */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
