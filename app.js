@@ -980,8 +980,15 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    Đăng nhập Google hoặc email/mật khẩu. Người đầu tiên đăng nhập (chưa thuộc
    cửa hàng nào, chưa được mời) trở thành CHỦ cửa hàng; chủ mời thêm người
    bằng email — người được mời đăng nhập bằng đúng email đó sẽ vào cùng cửa hàng.
-   v2.2: mở app là CỔNG ĐĂNG NHẬP (thay màn hình PIN); Google dùng redirect. */
-const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"quanlycuahang-1aa8a.firebaseapp.com",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
+   v2.2: mở app là CỔNG ĐĂNG NHẬP (thay màn hình PIN); Google dùng redirect.
+   v2.3: authDomain = cuahangtuyen.netlify.app (KHÔNG dùng firebaseapp.com):
+   Chrome chặn cookie/lưu trữ bên thứ ba giữa miền app và miền firebaseapp.com
+   làm đăng nhập Google quay về "chưa đăng nhập" không một lời lỗi. Netlify
+   proxy /__/auth/* + /__/firebase/* về firebaseapp.com (file _redirects ở
+   gốc repo) nên trang xử lý đăng nhập CÙNG miền với app khi chạy trên
+   Netlify → Google đăng nhập được. Hệ quả: link chính cho khách là Netlify;
+   bản GitHub Pages chỉ còn đăng nhập email/mật khẩu là chắc chắn. */
+const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.netlify.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
 try{const _s=JSON.parse(localStorage.getItem(SYNC_KEY)||'null');if(_s&&typeof _s==='object')_sync=Object.assign(_sync,_s);}catch(e){}
@@ -1030,7 +1037,7 @@ async function initSync(){
       if(user){try{sessionStorage.removeItem('qlch_gredir');}catch(e){}
         _sync.uid=user.uid;_sync.email=user.email||'';syncSaveMeta();updateSyncState();hideGate();await bindStore(user);}
       else{_sync.uid='';_sync.email='';_sync.storeId='';_sync.isOwner=false;_sync.ownerEmail='';_sync.memberEmails=[];syncSaveMeta();updateSyncState();
-        if(!_gateErr){try{if(sessionStorage.getItem('qlch_gredir'))_gateErr='Đăng nhập Google chưa hoàn tất — có thể trình duyệt đã chặn. Hãy mở link app bằng Chrome/Safari rồi thử lại.';sessionStorage.removeItem('qlch_gredir');}catch(e){}}
+        if(!_gateErr){try{if(sessionStorage.getItem('qlch_gredir'))_gateErr='Đăng nhập Google chưa hoàn tất — có thể bạn chưa chọn xong tài khoản, hoặc trình duyệt đã chặn bước quay lại app. Hãy thử bấm lại nút Google, hoặc đăng nhập bằng email + mật khẩu bên dưới.';sessionStorage.removeItem('qlch_gredir');}catch(e){}}
         gateReady();}
     });
   }catch(e){clearTimeout(slowTimer);gateFatal('Không tải được phần đăng nhập — kiểm tra kết nối mạng rồi tải lại trang.');}
