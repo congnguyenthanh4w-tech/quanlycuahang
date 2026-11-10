@@ -1,0 +1,112 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8">
+<title>Hướng dẫn sử dụng — Quản Lý Cửa Hàng</title>
+<style>
+@page{size:A4;margin:14mm 12mm}
+body{font-family:'Segoe UI',Arial,sans-serif;color:#16232b;font-size:13px;line-height:1.55;margin:0}
+h1{font-size:21px;margin:0 0 2px;color:#0b6e5f}
+.meta{color:#4a5a63;margin-bottom:6px}
+h2{font-size:15.5px;margin:19px 0 6px;color:#0b6e5f;border-bottom:2px solid #0e9384;padding-bottom:3px}
+p{margin:5px 0}
+ul,ol{margin:5px 0 5px 18px;padding:0}
+li{margin:3.5px 0}
+b.k{color:#0b6e5f}
+.box{background:#e6f6f2;border:1px solid #0e9384;border-radius:10px;padding:9px 13px;margin:10px 0}
+.warn{background:#fdf3e3;border:1px solid #e0a63f;border-radius:10px;padding:9px 13px;margin:10px 0}
+.foot{margin-top:22px;color:#4a5a63;font-size:11.5px;border-top:1px solid #cfe0dc;padding-top:8px}
+</style></head><body>
+<h1>HƯỚNG DẪN SỬ DỤNG — APP QUẢN LÝ CỬA HÀNG</h1>
+<div class="meta">Dành cho người dùng app tại cửa hàng · Link app: <b>cuahangtuyen.vercel.app</b> · Phiên bản app v2.5.0</div>
+
+<h2>1. Mở app và lần đầu sử dụng</h2>
+<ul>
+<li>Mở đường link app bằng <b>Chrome</b> (điện thoại Android) hoặc <b>Safari</b> (iPhone). Nếu nhận link qua Zalo, hãy bấm dấu ⋮ và chọn <b>“Mở bằng trình duyệt”</b> — mở ngay trong Zalo thì đăng nhập Google có thể không thành công.</li>
+<li>Mở app là gặp <b>màn hình đăng nhập</b>. Có 2 cách vào: <b>(1)</b> tự tạo tài khoản — bấm <b>Đăng nhập bằng Google</b>, hoặc nhập email + mật khẩu rồi bấm <b>Đăng ký tài khoản mới</b>; <b>(2)</b> dùng <b>tài khoản admin cấp sẵn</b> — nhập đúng email + mật khẩu được cấp rồi bấm <b>Đăng nhập</b>.</li>
+<li>Chỉ cần đăng nhập <b>một lần</b> trên mỗi máy — app tự ghi nhớ, những lần sau mở app là vào thẳng cửa hàng.</li>
+<li>App có 5 mục ở menu: <b class="k">Tổng quan · Sản phẩm · Công nợ khách hàng · Nhà cung cấp · Thu chi</b>. Trên điện thoại, menu nằm ở thanh dưới đáy màn hình.</li>
+</ul>
+
+<h2>2. Tổng quan — màn hình mở đầu</h2>
+<ul>
+<li>Hiện tổng tiền khách đang nợ, tổng tiền cửa hàng còn nợ nhà cung cấp, thu/chi hôm nay và tháng này.</li>
+<li>Hiện các <b>cảnh báo</b>: hàng đã hết hạn, hàng sắp hết hạn, hàng hết tồn (bằng 0), hàng sắp hết tồn. Bấm vào từng cảnh báo để xem đúng sản phẩm đó.</li>
+<li>Số cảnh báo còn hiện thành con số đỏ trên menu để không bỏ sót.</li>
+</ul>
+
+<h2>3. Sản phẩm</h2>
+<ul>
+<li>Bấm <b>＋ Thêm sản phẩm</b>: chụp/tải ảnh, điền tên, giá bán tham khảo, ngưỡng cảnh báo tồn kho, số ngày cảnh báo hết hạn. Mã sản phẩm để trống thì app tự sinh. <b>Mã vạch</b>: mỗi loại sản phẩm có đúng 1 mã vạch của nhà sản xuất — cạnh ô Barcode trong form có nút <b>Quét</b>, bấm để quét bằng camera và điền mã luôn (khỏi gõ 13 số). Máy nào không có sẵn bộ quét của trình duyệt (như iPhone) thì app tự dùng bộ quét kèm theo: quét trực tiếp qua camera, nếu camera trực tiếp không mở được thì app chuyển sang <b>chụp ảnh mã vạch</b> để đọc — chụp gần, rõ và đủ sáng là đọc được. Nếu mã quét được <b>đã có trong kho</b>, app sẽ báo và hỏi mở sản phẩm cũ (để nhập thêm hàng) thay vì tạo trùng. Với hàng mới, app còn thử <b>điền sẵn tên gợi ý</b> từ mã vạch (hàng nhập khẩu thường tra được, hàng trong nước có thể chưa có — lúc đó tự điền tên; giá bán luôn tự nhập).</li>
+<li><b>Nhập hàng:</b> ngay khi thêm sản phẩm mới, form có sẵn mục <b>“Lô nhập đầu tiên”</b> — điền luôn số lượng, giá nhập, ngày nhập và hạn dùng là app nhập lô luôn một lượt. Các lần nhập sau: mở chi tiết sản phẩm → <b>＋ Nhập thêm lô</b>. Mỗi lần nhập là một lô riêng, có ngày nhập, số lượng, giá nhập và hạn dùng riêng. Tồn kho của sản phẩm là tổng các lô cộng lại.</li>
+<li><b>Nhóm hàng và Đơn vị:</b> trong form sản phẩm, cuối danh sách có mục <b>“＋ Thêm nhóm mới…”</b> và <b>“＋ Thêm đơn vị mới…”</b> để tự thêm theo hàng của cửa hàng. Muốn đổi tên/xoá nhóm hoặc đơn vị: bấm nút <b>🏷 Nhóm &amp; đơn vị</b> ở trang Sản phẩm (mục nào đang có sản phẩm dùng thì không xoá được).</li>
+<li><b>Tìm hàng:</b> gõ tên, mã hoặc barcode vào ô tìm kiếm — gõ không dấu cũng được (ví dụ gõ “coc” vẫn ra Coca). Có thể sắp xếp theo tên, theo hàng sắp hết hạn, hàng tồn ít, hoặc lọc riêng hàng “Có cảnh báo”.</li>
+<li>Ngừng bán một mặt hàng: mở sản phẩm → Sửa → đổi Trạng thái thành <b>Ngừng kinh doanh</b>.</li>
+</ul>
+
+<h2>4. Công nợ khách hàng</h2>
+<ul>
+<li>Khách được xếp theo <b>thôn</b>. Thêm/đổi tên/xoá thôn ở nút <b>Quản lý thôn</b>.</li>
+<li>Bấm <b>＋ Thêm khách</b>: họ tên, thôn, số điện thoại, ghi chú nhận diện (ví dụ “nhà gần đình”). Ngay trong form này có mục <b>“Khoản nợ đầu tiên”</b>: khách mua nợ ngay thì điền luôn tiền nợ, nợ gì và ảnh bằng chứng — app ghi nợ luôn một lượt, khỏi phải mở hồ sơ ghi riêng.</li>
+<li><b>Ghi nợ:</b> mở hồ sơ khách → <b>＋ Ghi khoản nợ mới</b>: ngày giờ, ghi chú nợ gì, tổng tiền, chụp ảnh/video bằng chứng nếu có. Một khách có thể có nhiều khoản nợ cùng lúc.</li>
+<li><b>Khách trả tiền:</b> bấm nút <b>Trả nợ</b> ngay trong danh sách (hoặc mở khoản nợ rồi bấm Ghi trả nợ): nhập số tiền trả (trả một phần cũng được), phương thức, người thu tiền. Tiền trả <b>tự chạy sang mục Thu chi</b> thành một khoản thu — không phải nhập lại, không bị ghi trùng. Số còn lại của khoản nợ tự cập nhật, lịch sử trả được giữ nguyên kể cả khi đã trả hết.</li>
+<li><b>Nhắc nợ:</b> trong hồ sơ khách có nút <b>📋 Nhắc nợ</b> — app soạn sẵn tin nhắn liệt kê từng khoản còn nợ, bấm là sao chép xong, dán vào Zalo hoặc SMS để gửi.</li>
+<li>Nút <b>📞 Gọi</b> trong danh sách bấm là gọi ngay cho khách. Có nút lọc <b>“Chỉ khách đang nợ”</b> để xem riêng khách còn nợ; khách nợ nhiều tự xếp lên trước trong thôn.</li>
+</ul>
+
+<h2>5. Nhà cung cấp và hoá đơn</h2>
+<ul>
+<li>Bấm <b>＋ Thêm nhà cung cấp</b>: tên, số điện thoại, địa chỉ, ghi chú.</li>
+<li>Mở nhà cung cấp → <b>＋ Thêm hoá đơn nhập</b>: ngày nhập, chụp ảnh hoá đơn, tổng tiền, ghi chú.</li>
+<li><b>Trả tiền nhà cung cấp:</b> bấm <b>Thanh toán</b> trong hoá đơn, nhập số tiền (trả nhiều lần được). Tiền <b>tự chạy sang mục Thu chi</b> thành một khoản chi. Số còn nợ của từng hoá đơn tự cập nhật.</li>
+</ul>
+
+<h2>6. Thu chi</h2>
+<ul>
+<li>Bấm <b>＋ Thêm thu / chi</b> cho các khoản nhập tay: thu khác, thu bổ sung; chi điện nước, vận chuyển, chi phí cửa hàng, chi khác. Mỗi khoản gồm: ngày giờ, loại, số tiền, nội dung, người thực hiện, ảnh chứng từ, ghi chú.</li>
+<li>Các khoản ghi <b>“Tự động từ công nợ…”</b> là app tự tạo khi khách trả nợ / trả nhà cung cấp. Những khoản này bị khoá ở mục Thu chi — muốn sửa hoặc xoá thì vào chính lần trả nợ/thanh toán đó để sửa, tránh lệch sổ.</li>
+<li>Lọc xem theo khoản thu / khoản chi và theo khoảng ngày ở thanh công cụ phía trên.</li>
+</ul>
+
+<h2>7. Xuất báo cáo Excel</h2>
+<ul>
+<li>Bấm <b>Xuất báo cáo Excel</b> (menu trái trên máy tính, nút <b>Excel</b> trên điện thoại, hoặc trên trang Tổng quan) — app tải về 1 file <b>.xlsx</b> gồm 9 trang: Tổng quan · Sản phẩm · Lô hàng · Công nợ khách hàng · Lịch sử trả nợ · Khách hàng · Hoá đơn NCC · Thanh toán NCC · Thu chi.</li>
+<li>Mỗi trang có tiêu đề lớn, hàng tiêu đề cột tô màu, cột tiền là số thật (cộng/trừ, sắp xếp trong Excel được), có dòng TỔNG ở cuối.</li>
+<li>Phân biệt: file <b>Excel</b> để xem, gửi, báo cáo; file <b>Sao lưu (.json)</b> để khôi phục dữ liệu vào app.</li>
+</ul>
+
+<h2>8. Tài khoản, đồng bộ &amp; mời người quản lý</h2>
+<p>Các máy (điện thoại, máy tính) đăng nhập cùng một cửa hàng sẽ dùng <strong>chung một bộ dữ liệu</strong>: thêm hàng, ghi nợ ở máy này thì máy kia thấy ngay sau vài giây.</p>
+<ul>
+<li><strong>Đăng nhập:</strong> ngay ở màn hình đầu tiên khi mở app (xem mục 1). Bấm <strong>“Đăng nhập bằng Google”</strong> thì app chuyển sang trang của Google để chọn tài khoản, xong tự quay lại app — chỉ cần làm <strong>một lần</strong> trên mỗi máy.</li>
+<li><strong>Người đăng nhập đầu tiên là “Chủ cửa hàng”.</strong> Nếu máy đó đang có dữ liệu, dữ liệu ấy được đưa lên làm dữ liệu chung của cửa hàng — vì vậy hãy đăng nhập lần đầu trên chiếc máy đang chứa dữ liệu thật (nếu có).</li>
+<li><strong>Mời thêm người quản lý:</strong> chủ cửa hàng mở mục <strong>“☁️ Tài khoản &amp; đồng bộ”</strong> (menu bên trái trên máy tính, hoặc dải ở cuối trang trên điện thoại) → nhập <strong>email</strong> của người kia → bấm <strong>“Gửi lời mời”</strong>. Người được mời mở app, đăng nhập bằng đúng email đó là vào cùng cửa hàng. Chủ cũng có thể <strong>Gỡ</strong> một người quản lý bất cứ lúc nào trong cùng mục này.</li>
+<li>Dòng chữ trạng thái trong mục “Tài khoản &amp; đồng bộ” cho biết app đã đồng bộ lúc mấy giờ.</li>
+<li>Đã đăng nhập mà mất mạng vẫn dùng bình thường; có mạng trở lại app tự đồng bộ. Nếu hai máy cùng sửa một lúc, bản lưu sau cùng sẽ được giữ.</li>
+<li><strong>Đăng xuất</strong> (trong mục “Tài khoản &amp; đồng bộ”) không xoá dữ liệu trên máy — máy chỉ ngừng đồng bộ, và lần mở app sau sẽ hỏi đăng nhập lại.</li>
+</ul>
+<h2>9. Sao lưu và khôi phục dữ liệu — RẤT QUAN TRỌNG</h2>
+<div class="box">Bản này lưu dữ liệu ngay trên trình duyệt của thiết bị đang dùng. Hãy bấm <b>⬇ Sao lưu</b> thường xuyên để tải file dữ liệu (.json) về máy và cất giữ cẩn thận. Khi đổi máy hoặc lỡ xoá trình duyệt: mở app → bấm <b>⬆ Khôi phục</b> → chọn file sao lưu đó là lấy lại toàn bộ dữ liệu. Nếu lâu chưa sao lưu, trang Tổng quan sẽ hiện dòng nhắc sao lưu.</div>
+
+<h2>10. Mã PIN bảo vệ (tuỳ chọn)</h2>
+<ul>
+<li>Việc mở app đã được bảo vệ bằng <b>đăng nhập tài khoản</b>. Ngoài ra có thể đặt thêm mã PIN <b>6 chữ số</b>: bấm <b>🔐 Mã PIN bảo vệ</b> (menu trái, hoặc dải ở cuối trang) → đặt PIN.</li>
+<li>Mã PIN dùng để xác nhận trước khi <b>Xoá toàn bộ dữ liệu</b> hoặc <b>Khôi phục dữ liệu</b> — tránh bấm nhầm hoặc người khác táy máy xoá/ghi đè sổ sách.</li>
+<li>Đổi PIN hoặc tắt PIN cũng ở mục đó và phải nhập PIN hiện tại trước.</li>
+</ul>
+<div class="warn">⚠️ <b>Quên mã PIN thì không xoá / khôi phục được dữ liệu.</b> Hãy nhớ kỹ mã PIN và sao lưu dữ liệu thường xuyên.</div>
+
+<h2>11. Xoá toàn bộ dữ liệu (bắt đầu lại từ đầu)</h2>
+<ul>
+<li>Bấm <b>Xoá toàn bộ dữ liệu</b> ở cuối trang hoặc menu trái → nhập mã PIN (nếu đã đặt) → xác nhận.</li>
+<li>Trước khi xoá, app <b>tự tải xuống 1 bản sao lưu</b> để cần thì khôi phục lại. Sau khi xoá, app trống như mới cài (giữ sẵn 5 thôn mặc định).</li>
+</ul>
+
+<h2>12. Mẹo dùng nhanh</h2>
+<ul>
+<li><b>Ô nhập tiền tự chèn dấu chấm:</b> cứ gõ 1500000, app tự hiện 1.500.000.</li>
+<li><b>Tìm kiếm không cần dấu:</b> gõ “tuyen”, “nuoc ngot” vẫn tìm được.</li>
+<li><b>Xoá nhầm:</b> ngay sau khi xoá (sản phẩm, khoản nợ, hoá đơn, giao dịch), app hiện nút <b>Hoàn tác</b> trong 7 giây — bấm vào là lấy lại được.</li>
+<li><b>Sáng / tối:</b> nút đổi chế độ ở menu — app nhớ lựa chọn cho lần sau.</li>
+<li>Ảnh bằng chứng/chứng từ cứ chụp thẳng bằng điện thoại trong lúc nhập, app tự nén ảnh cho nhẹ. Video bằng chứng nhận file tối đa 4MB.</li>
+</ul>
+
+<div class="foot">Hướng dẫn sử dụng app Quản Lý Cửa Hàng — bản v2.4.0. Đăng nhập tài khoản để các máy dùng chung một bộ dữ liệu của cửa hàng.</div>
+</body></html>

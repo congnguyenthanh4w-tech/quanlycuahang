@@ -76,7 +76,7 @@ function productAlerts(p){
     if((Number(l.qty)||0)<=0||!l.expiry)continue;
     const du=daysUntil(l.expiry);
     if(du<0)out.push({kind:'expired',label:'Có lô đã hết hạn '+fmtDate(l.expiry)});
-    else if(du<=(Number(p.warnDays)||30))out.push({kind:'expiring',label:'Lô sắp hết hạn '+fmtDate(l.expiry)+' ('+du+' ngày)'});
+    else if(du<=(Number(p.warnDays)||30))out.push({kind:'expiring',label:'Sắp hết hạn '+fmtDate(l.expiry)+' ('+du+' ngày)'});
   }
   return out;
 }
@@ -124,7 +124,7 @@ function openModal(html){modalBox.innerHTML='<button class="close-x" id="modalCl
     wrap.querySelector('.filepick-btn').onclick=()=>inp.click();
     inp.addEventListener('change',()=>{const f=inp.files&&inp.files[0];nameEl.textContent=f?f.name:'Chưa chọn tệp';});});
   if(!('ontouchstart' in window))setTimeout(()=>{const f=modalBox.querySelector('input:not([type="file"]):not([type="date"]):not([type="datetime-local"]),select,textarea');if(f)f.focus();},70);}
-function closeModal(){modalWrap.classList.add('hidden');modalBox.innerHTML='';}
+function closeModal(){_scanCb=null;modalWrap.classList.add('hidden');modalBox.innerHTML='';}
 modalWrap.addEventListener('click',e=>{if(e.target===modalWrap)closeModal();});
 function field(label,inner){return '<div class="field"><label>'+label+'</label>'+inner+'</div>';}
 function fileToDataURL(input,cb){
@@ -240,13 +240,13 @@ document.getElementById('prodGroupChips').addEventListener('click',e=>{
 document.getElementById('productList').addEventListener('click',e=>{
   const r=e.target.closest('[data-prod]');if(r)openProduct(r.dataset.prod);});
 
-function productForm(p){
-  p=p||{name:'',code:'',barcode:'',group:groups()[0],unit:'Gói',sellPrice:'',threshold:5,warnDays:30,status:'active',image:'',lots:[],priceHistory:[]};
+function productForm(p,prefillBarcode){
+  p=p||{name:'',code:'',barcode:prefillBarcode||'',group:groups()[0],unit:'Gói',sellPrice:'',threshold:5,warnDays:30,status:'active',image:'',lots:[],priceHistory:[]};
   openModal('<h2>'+(p.id?'Sửa sản phẩm':'Thêm sản phẩm')+'</h2><form id="fProd">'+
     field('Ảnh sản phẩm (chụp hoặc tải lên)','<input type="file" id="pImage" accept="image/*">'+(p.image?'<img class="preview" id="pPreview" src="'+p.image+'">':'<img class="preview hidden" id="pPreview">'))+
     field('Tên sản phẩm *','<input id="pName" required value="'+esc(p.name)+'">')+
     '<div class="grid2">'+field('Mã sản phẩm (để trống = tự sinh)','<input id="pCode" value="'+esc(p.code||'')+'" placeholder="VD: HH001">')+
-    field('Barcode','<input id="pBarcode" value="'+esc(p.barcode||'')+'" inputmode="numeric">')+'</div>'+
+    field('Barcode','<div class="scan-row"><input id="pBarcode" value="'+esc(p.barcode||'')+'" inputmode="numeric" placeholder="Quét hoặc gõ mã"><button type="button" class="btn" id="pScanBtn">Quét</button></div>')+'</div>'+
     '<div class="grid2">'+field('Nhóm hàng','<select id="pGroup">'+groups().map(g=>'<option'+(p.group===g?' selected':'')+'>'+esc(g)+'</option>').join('')+'<option value="__add">＋ Thêm nhóm mới…</option></select>')+
     field('Đơn vị','<select id="pUnit">'+units().map(u=>'<option'+((p.unit||'Gói')===u?' selected':'')+'>'+esc(u)+'</option>').join('')+'<option value="__add">＋ Thêm đơn vị mới…</option></select>')+'</div>'+
     '<div class="grid2">'+field('Giá bán tham khảo','<input id="pSell" class="mn" inputmode="numeric" value="'+esc(p.sellPrice)+'">')+
@@ -263,7 +263,14 @@ function productForm(p){
   taxSel('pGroup','group');taxSel('pUnit','unit');
   let imageData=p.image||'';
   document.getElementById('pImage').addEventListener('change',e=>fileToDataURL(e.target,(d)=>{if(d){imageData=d;const pv=document.getElementById('pPreview');pv.src=d;pv.classList.remove('hidden');}}));
+  document.getElementById('pScanBtn').onclick=()=>startScan(code=>fillBarcodeFromScan(code,p.id||null));
+  const bcInp=document.getElementById('pBarcode');
+  bcInp.addEventListener('change',()=>{const v=bcInp.value.trim();if(v.length>=8){checkBarcodeDup(v,p.id||null);lookupBarcodeName(v);}});
+  if(prefillBarcode)lookupBarcodeName(prefillBarcode);
   document.getElementById('fProd').onsubmit=e=>{e.preventDefault();
+    const bcVal=document.getElementById('pBarcode').value.trim();
+    if(bcVal){const dupB=DB.products.find(x=>x.barcode===bcVal&&x.id!==p.id);
+      if(dupB){alert('Mã vạch này đã thuộc sản phẩm "'+dupB.name+'" — mỗi loại sản phẩm chỉ có một mã vạch. Hãy mở sản phẩm đó để nhập thêm hàng, đừng tạo trùng.');return;}}
     const sell=num(document.getElementById('pSell').value);
     if(p.id&&Number(p.sellPrice)!==sell)p.priceHistory.push({date:todayISO(),kind:'Giá bán',price:sell});
     Object.assign(p,{name:document.getElementById('pName').value.trim(),
@@ -283,7 +290,7 @@ function productForm(p){
     save();closeModal();renderAll();toast(firstLot?'Đã lưu sản phẩm + nhập lô đầu tiên.':'Đã lưu sản phẩm.');if(p.id)openProduct(p.id);
   };
 }
-document.getElementById('btnAddProduct').onclick=()=>productForm(null);
+document.getElementById('btnAddProduct').onclick=()=>{const sv=document.getElementById('prodSearch').value.trim();productForm(null,/^\d{8,}$/.test(sv)?sv:'');};
 function taxSel(selId,kind){
   const sel=document.getElementById(selId);if(!sel)return;let prev=sel.value;
   sel.addEventListener('change',()=>{
@@ -377,10 +384,47 @@ function lotForm(p){
    BarcodeDetector (nhiều máy Android/iPhone) thì tải bộ quét Quagga2 quét
    trực tiếp qua camera; (3) nếu không mở được camera trực tiếp thì chụp ảnh
    mã vạch rồi giải mã từ ảnh. */
+/* Nơi nhận kết quả quét: mặc định là onBarcode (tìm ở tab Sản phẩm);
+   form sản phẩm gọi startScan(cb) để nhận mã về ô Barcode của form. */
+let _scanCb=null;
+function dispatchScan(code){const cb=_scanCb;_scanCb=null;if(cb)cb(code);else onBarcode(code);}
 function onBarcode(code){
   document.getElementById('prodSearch').value=code;prodGroupFilter='';renderProducts();
   const hit=DB.products.find(p=>p.barcode===code);
   toast(hit?'Tìm thấy: '+hit.name:'Chưa có sản phẩm với barcode này — bấm Thêm và điền sẵn mã.');
+}
+/* Mỗi loại sản phẩm có đúng 1 mã vạch của nhà sản xuất: quét trúng mã
+   đã có trong kho thì coi chừng tạo trùng. */
+function checkBarcodeDup(code,selfId){
+  const dup=DB.products.find(x=>x.barcode===code&&x.id!==selfId);
+  if(dup)toast('⚠ Mã này đã thuộc sản phẩm "'+dup.name+'"');
+  return dup;
+}
+function fillBarcodeFromScan(code,selfId){
+  const inp=document.getElementById('pBarcode');if(!inp)return;
+  inp.value=code;
+  const dup=checkBarcodeDup(code,selfId);
+  if(dup){if(confirm('Mã vạch này đã thuộc sản phẩm "'+dup.name+'".\nMở sản phẩm đó để nhập thêm hàng thay vì tạo trùng?')){closeModal();openProduct(dup.id);}return;}
+  toast('Đã điền mã vạch: '+code);
+  lookupBarcodeName(code);
+}
+/* Mã MỚI chưa có trong kho: thử tra tên sản phẩm từ kho dữ liệu mã vạch
+   mở (Open Food Facts, miễn phí, cần mạng) để điền sẵn ô Tên — chỉ là
+   gợi ý cho người dùng sửa lại; GIÁ luôn do người dùng tự nhập. Tra
+   không thấy / mất mạng thì im lặng bỏ qua. */
+function lookupBarcodeName(code){
+  const nameEl=document.getElementById('pName');
+  if(!nameEl||nameEl.value.trim()||!/^\d{8,}$/.test(code||''))return;
+  let ctl=null,to=0;
+  if('AbortController' in window){ctl=new AbortController();to=setTimeout(()=>ctl.abort(),4500);}
+  fetch('https://world.openfoodfacts.org/api/v2/product/'+encodeURIComponent(code)+'?fields=product_name,product_name_vi,brands',ctl?{signal:ctl.signal}:undefined)
+    .then(r=>r.json()).then(j=>{if(to)clearTimeout(to);
+      const pr=j&&j.product;if(!pr)return;
+      const nm=((pr.product_name_vi||pr.product_name||'')+'').trim();
+      if(!nm)return;
+      const cur=document.getElementById('pName');
+      if(cur&&!cur.value.trim()){cur.value=nm;toast('Đã điền tên gợi ý từ mã vạch — kiểm tra lại nếu chưa đúng; giá bán tự nhập nhé.');}
+    }).catch(()=>{if(to)clearTimeout(to);});
 }
 /* Chỉ giữ các định dạng dài (EAN-13, UPC-A, Code128): các reader định dạng ngắn
    (EAN-8/UPC-E) dễ đọc nhầm một đoạn của mã dài thành mã ngắn sai. */
@@ -402,7 +446,7 @@ function scanByPhoto(){
       r.onload=()=>{Quagga.decodeSingle({src:r.result,numOfWorkers:0,inputStream:{size:1600},
           decoder:{readers:SCAN_READERS},locate:true},
         res=>{const code=res&&res.codeResult&&res.codeResult.code;
-          if(code)onBarcode(code);
+          if(code)dispatchScan(code);
           else toast('Không đọc được mã trong ảnh — chụp gần, rõ và đủ sáng hơn, hoặc gõ barcode vào ô tìm kiếm.');});};
       r.readAsDataURL(f);};
     inp.click();
@@ -415,10 +459,10 @@ function stopQuaggaScan(){
 function scanLiveFallback(){
   loadQuagga().then(()=>{
     const ov=document.getElementById('scanOverlay');ov.classList.remove('hidden');
-    document.getElementById('btnScanClose').onclick=stopQuaggaScan;
+    document.getElementById('btnScanClose').onclick=()=>{_scanCb=null;stopQuaggaScan();};
     let done=false;
     Quagga.onDetected(res=>{if(done)return;const code=res&&res.codeResult&&res.codeResult.code;
-      if(!code)return;done=true;stopQuaggaScan();onBarcode(code);});
+      if(!code)return;done=true;stopQuaggaScan();dispatchScan(code);});
     Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('scanView'),
         constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
       locator:{patchSize:'medium',halfSample:true},numOfWorkers:2,frequency:10,
@@ -427,7 +471,8 @@ function scanLiveFallback(){
         Quagga.start();});
   }).catch(()=>scanByPhoto());
 }
-document.getElementById('btnScan').onclick=async()=>{
+async function startScan(cb){
+  _scanCb=cb||null;
   const hasCam=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia);
   if(hasCam&&'BarcodeDetector' in window){
     const v=document.getElementById('scanVideo');
@@ -438,17 +483,18 @@ document.getElementById('btnScan').onclick=async()=>{
       toast('Đưa mã vạch vào camera… chạm màn hình để huỷ.');
       const tick=async()=>{ if(v.classList.contains('hidden'))return;
         try{const codes=await det.detect(v);if(codes&&codes.length){
-          const code=codes[0].rawValue;stopScan();onBarcode(code);return;}}catch(e){}
+          const code=codes[0].rawValue;stopScan();dispatchScan(code);return;}}catch(e){}
         requestAnimationFrame(()=>setTimeout(tick,250));};
       tick();
-      v.onclick=stopScan;
-      function stopScan(){v.classList.add('hidden');stream.getTracks().forEach(t=>t.stop());}
-    }catch(e){toast('Không mở được camera — hãy kiểm tra quyền camera của trình duyệt.');}
+      v.onclick=()=>stopScan(true);
+      function stopScan(cancel){if(cancel)_scanCb=null;v.classList.add('hidden');stream.getTracks().forEach(t=>t.stop());}
+    }catch(e){_scanCb=null;toast('Không mở được camera — hãy kiểm tra quyền camera của trình duyệt.');}
     return;
   }
   if(hasCam){scanLiveFallback();return;}
   scanByPhoto();
-};
+}
+document.getElementById('btnScan').onclick=()=>startScan(null);
 
 /* ---------- CÔNG NỢ KHÁCH HÀNG ---------- */
 let villageFilter='',custDebtOnly=false;
@@ -1087,7 +1133,13 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    no-cache cho mọi file nên hết cảnh app.js bị cache 10 phút như Pages.
    LINK CHÍNH từ v2.4: https://cuahangtuyen.vercel.app — Netlify/Pages thành
    dự phòng (đăng nhập email vẫn được; Google ở đó khác miền với authDomain
-   nên có thể lại bị Chrome chặn). */
+   nên có thể lại bị Chrome chặn).
+   v2.5.0: vòng làm đẹp "tĩnh" (badge cảnh báo nhỏ nhạt, chip + nút phẳng,
+   hero gọn, banner sao lưu mỏng, thẻ lẻ tràn hàng) + hạ thanh tab mobile
+   sát đáy (hết badge Netlify) + sửa lệch ô Barcode trong form (nhãn 2 dòng
+   vs 1 dòng) + QUÉT ĐIỀN NHANH: nút Quét ngay trong form sản phẩm, quét
+   trúng mã đã có thì hỏi mở sản phẩm cũ (chặn tạo trùng cả khi lưu),
+   mã mới thì thử tra tên gợi ý từ Open Food Facts (giá vẫn nhập tay). */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};

@@ -1,10 +1,10 @@
 :root{
   --bg:#f3f5f7; --surface:#ffffff; --surface2:#eef1f4; --text:#15222c; --muted:#68798a;
-  --line:#e3e8ee; --accent:#2f8c7e; --accent2:#27796a; --accent-grad:linear-gradient(135deg,#379e8c,#27796a);
+  --line:#e7ecef; --accent:#2f8c7e; --accent2:#27796a; --accent-grad:linear-gradient(135deg,#379e8c,#27796a);
   --accent-soft:rgba(47,140,126,.1); --accent-text:#ffffff;
   --danger:#c23a2e; --danger-soft:#fdf0ef; --warn:#b54708; --warn-soft:#fffaeb;
   --ok:#177a52; --ok-soft:#ecfdf3; --blue:#3568b8; --blue-soft:#eff4fc;
-  --shadow-sm:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);
+  --shadow-sm:0 1px 2px rgba(16,24,40,.04);
   --shadow:0 10px 28px rgba(16,24,40,.13); --ring:0 0 0 4px rgba(47,140,126,.15);
   --radius:16px;
 }
@@ -67,12 +67,14 @@ html[data-theme="dark"] .side-tab.active{color:var(--accent)}
   .top-actions .btn{justify-content:center;padding:8px 4px;font-size:13.5px}
   #btnTheme{order:-1;position:absolute;top:9px;right:14px;padding:7px 12px;font-size:13px;border-radius:999px}
   .topbar{position:relative}
-  /* Thanh tab "nổi" cách đáy 56px: chừa vùng góc dưới-phải cho badge
-     "Powered by Netlify" để nó không che mất tab nào. */
-  .tabs{display:flex;position:fixed;left:8px;right:8px;bottom:56px;z-index:25;gap:2px;padding:6px;background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--line);border-radius:18px;box-shadow:0 10px 28px rgba(10,20,30,.18)}
-  main{padding-bottom:172px}
-  .foot{padding-bottom:150px}
-  .toast{bottom:132px}
+  /* Thanh tab ghim sát đáy màn hình (v2.4.1, khi app đã chuyển sang
+     Vercel — không còn badge Netlify ở góc dưới-phải nên hạ thanh tab
+     từ kiểu thẻ nổi của v2.3.2 xuống đáy như app thường; cộng thêm
+     vùng an toàn home-indicator của iPhone bằng env()). */
+  .tabs{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:25;gap:2px;padding:6px 6px calc(6px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line);box-shadow:0 -8px 24px rgba(10,20,30,.10)}
+  main{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+  .foot{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+  .toast{bottom:calc(88px + env(safe-area-inset-bottom))}
 }
 .tab{flex:1;border:0;background:transparent;border-radius:11px;padding:7px 2px;cursor:pointer;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
 .tab span{font-size:11px}
@@ -200,6 +202,11 @@ html[data-theme="dark"] .stat-ico{color:var(--accent)}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
 .field img.preview{max-width:100%;max-height:180px;border-radius:11px;margin-top:6px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* Trong hàng 2 cột: nhãn dài/ngắn khác nhau (1 dòng vs 2 dòng) từng làm
+   ô nhập 2 bên lệch độ cao (vd "Mã sản phẩm (để trống = tự sinh)" cạnh
+   "Barcode"). Ghim ô nhập xuống đáy ô chứa -> 2 ô luôn ngang hàng. */
+.grid2>.field{display:flex;flex-direction:column}
+.grid2>.field>:last-child{margin-top:auto}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .actions .btn{flex:1}
 .kv{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:15px}
@@ -355,3 +362,53 @@ a.btn{text-decoration:none;color:inherit}
 .member-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)}
 .member-row em{color:var(--muted);font-style:normal;font-size:12.5px}
 .member-row .member-del{color:var(--danger);padding:4px 10px}
+
+/* ---------- v2.5.0: vòng làm đẹp "tĩnh" (Cruz: đẹp + không rối mắt) ----------
+   Nguyên tắc: bớt khối màu đặc, bớt viền/bóng, nhãn cảnh báo thành
+   miếng dán nhỏ nhạt thay vì mảng màu nâu/đỏ to, nút bấm phẳng hơn,
+   hero phẳng + nút gọn, nhịp khoảng cách đều. */
+.btn{box-shadow:none}
+.btn-primary{box-shadow:0 4px 12px rgba(11,122,110,.20)}
+.chip{box-shadow:none;background:transparent;padding:5px 12px;font-size:13px}
+.chip.active{background:var(--accent-soft);color:var(--accent2);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+html[data-theme="dark"] .chip.active{color:var(--accent)}
+.badge{font-size:11.5px;padding:2.5px 8px;font-weight:600}
+.badge.amber{background:color-mix(in srgb,var(--warn) 13%,transparent);color:var(--warn)}
+.badge.red{background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger)}
+.row .badge{margin-right:2px}
+.card{padding:15px}
+.card b{font-size:22px}
+.card small{font-size:11px}
+.stat-ico.red{background:color-mix(in srgb,var(--danger) 11%,transparent)}
+.stat-ico.amber{background:color-mix(in srgb,var(--warn) 12%,transparent)}
+.stat-ico.green{background:color-mix(in srgb,var(--ok) 11%,transparent)}
+.stat-ico.blue{background:color-mix(in srgb,var(--blue) 11%,transparent)}
+.dot-ico{background:color-mix(in srgb,var(--ok) 11%,transparent)}
+.dot-ico.chi{background:color-mix(in srgb,var(--danger) 11%,transparent)}
+.dot-ico.warn{background:color-mix(in srgb,var(--warn) 12%,transparent)}
+.dot-ico.blue{background:color-mix(in srgb,var(--blue) 11%,transparent)}
+.hero{background:linear-gradient(125deg,#265f55,#2d7264 60%,#35806e);box-shadow:0 8px 20px rgba(23,68,60,.16);padding:20px;margin-bottom:14px}
+html[data-theme="dark"] .hero{background:linear-gradient(125deg,#143f36,#1a5146 60%,#205c4f);box-shadow:0 8px 20px rgba(0,0,0,.3)}
+.hero-value{font-size:30px}
+.hero-art{opacity:.09}
+.hero-btn{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.28);min-height:38px;padding:6px 11px;font-size:13.5px;border-radius:10px}
+.hero{padding:20px 18px}
+.hero-btn:hover{background:rgba(255,255,255,.22)}
+.backup-hint{background:color-mix(in srgb,var(--warn) 8%,var(--surface));border:1px solid color-mix(in srgb,var(--warn) 32%,var(--line));color:var(--text);font-size:13.5px;padding:10px 13px;border-radius:12px}
+.backup-hint .btn{background:transparent;border-color:color-mix(in srgb,var(--warn) 45%,transparent);color:var(--warn);box-shadow:none;margin-left:auto}
+.row:hover{transform:none;border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
+.row.no-click:hover{border-color:var(--line)}
+.page-head{margin:4px 0 16px}
+.page-head p{font-size:13.5px}
+.toolbar .btn,.toolbar .input{min-height:42px}
+.top-actions .btn{background:color-mix(in srgb,var(--surface2) 45%,transparent)}
+.modal{border-radius:20px 20px 0 0}
+@media(min-width:700px){.modal{border-radius:20px}}
+@media(max-width:719.5px){
+  /* Lưới thẻ 2 cột mà số thẻ lẻ: thẻ cuối tràn cả hàng cho khỏi lửng 1 nửa */
+  .cards>.card:last-child:nth-child(odd){grid-column:1/-1}
+}
+/* Ô Barcode trong form sản phẩm: ô nhập + nút Quét trên cùng 1 hàng */
+.scan-row{display:flex;gap:8px}
+.scan-row input{flex:1;min-width:0}
+.scan-row .btn{flex:none;min-height:44px}
