@@ -441,3 +441,15 @@ html[data-theme="dark"] .hero{background:linear-gradient(125deg,#143f36,#1a5146 
 .mq-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .mq{border:1px solid var(--line);background:var(--surface2);color:var(--text);border-radius:999px;padding:5px 10px;font-size:12.5px;cursor:pointer}
 .mq:active{transform:scale(.96)}
+
+/* v2.6.0 — gọn & khoa học: panel bộ lọc thu sau nút bấm; chip tiền chỉ
+   hiện khi đã gõ; danger-zone mobile xếp nút full hàng; lọc ngày 1 hàng */
+.filter-panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:13px;box-shadow:var(--shadow-sm)}
+.filter-panel .chips{margin-bottom:10px}
+.btn.on-filter{border-color:var(--accent);color:var(--accent);font-weight:600}
+#prodSort{flex:0 1 128px;min-width:0}
+.date-range{display:flex;gap:8px;align-items:center;flex:1 1 100%}
+.date-range .input{flex:1;min-width:0}
+.date-sep{color:var(--muted);font-size:13px;flex:none}
+.stats td:nth-child(2){white-space:nowrap}
+@media(max-width:719.5px){.danger-zone .btn{flex:1 1 100%}}

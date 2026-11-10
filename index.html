@@ -120,11 +120,14 @@
             <option value="stockAsc">Tồn ít trước</option>
             <option value="expiry">Sắp hết hạn trước</option>
           </select>
-          <button id="btnTaxonomy" class="btn">🏷 Nhóm & đơn vị</button>
-          <button id="btnScan" class="btn">Quét mã vạch</button>
           <button id="btnAddProduct" class="btn btn-primary">＋ Thêm sản phẩm</button>
+          <button id="btnScan" class="btn">Quét mã vạch</button>
+          <button id="btnProdFilter" class="btn" aria-expanded="false">Bộ lọc ▾</button>
         </div>
-        <div class="chips" id="prodGroupChips"></div>
+        <div class="filter-panel hidden" id="prodFilterPanel">
+          <div class="chips" id="prodGroupChips"></div>
+          <button id="btnTaxonomy" class="btn btn-sm">🏷 Quản lý nhóm & đơn vị</button>
+        </div>
         <div id="productList" class="list"></div>
       </section>
 
@@ -133,11 +136,14 @@
         <div class="cards" id="debtCards"></div>
         <div class="toolbar">
           <input id="custSearch" class="input grow" type="search" placeholder="Tìm khách theo tên hoặc số điện thoại…">
-          <button id="btnDebtOnly" class="btn">Chỉ khách đang nợ</button>
-          <button id="btnVillages" class="btn">Quản lý thôn</button>
           <button id="btnAddCustomer" class="btn btn-primary">＋ Thêm khách</button>
+          <button id="btnDebtOnly" class="btn">Chỉ khách đang nợ</button>
+          <button id="btnVillageFilter" class="btn" aria-expanded="false">Bộ lọc ▾</button>
         </div>
-        <div class="chips" id="villageChips"></div>
+        <div class="filter-panel hidden" id="villageFilterPanel">
+          <div class="chips" id="villageChips"></div>
+          <button id="btnVillages" class="btn btn-sm">🏘 Quản lý thôn</button>
+        </div>
         <div id="customerList"></div>
         <div class="page-head row-head"><div><h2>Thống kê công nợ</h2><p>Tổng nợ từng khách và dòng tiền thu hồi</p></div></div>
         <div id="debtStats"></div>
@@ -163,9 +169,8 @@
             <option value="thu">Chỉ khoản thu</option>
             <option value="chi">Chỉ khoản chi</option>
           </select>
-          <input id="cashFrom" class="input" type="date">
-          <input id="cashTo" class="input" type="date">
           <button id="btnAddCash" class="btn btn-primary">＋ Thêm thu / chi</button>
+          <div class="date-range"><input id="cashFrom" class="input" type="date" aria-label="Từ ngày"><span class="date-sep">đến</span><input id="cashTo" class="input" type="date" aria-label="Đến ngày"></div>
         </div>
         <div id="cashSum" class="cash-sum"></div>
         <div id="cashList" class="list"></div>

@@ -116,9 +116,9 @@ function openModal(html){modalBox.innerHTML='<button class="close-x" id="modalCl
        gõ "5" -> gợi ý 5.000 / 50.000 / 500.000 / 5.000.000; ô đang trống
        thì hiện các mức phổ biến. Bấm 1 gợi ý là điền luôn số tiền đó. */
     const mq=document.createElement('div');mq.className='mq-row';
-    const mqRender=()=>{const raw=inp.value.replace(/[^\d]/g,'');const v=raw?Number(raw):0;let list;
-      if(!v)list=[10000,20000,50000,100000,500000,1000000];
-      else{list=[];if(v>=1000)list.push(v);[1000,10000,100000,1000000].forEach(m=>{const x=v*m;if(x<=999999999999&&list.indexOf(x)<0)list.push(x);});list=list.slice(0,6);}
+    const mqRender=()=>{const raw=inp.value.replace(/[^\d]/g,'');const v=raw?Number(raw):0;
+      if(!v){mq.innerHTML='';return;} /* v2.6.0: chỉ gợi ý KHI ĐÃ BẮT ĐẦU GÕ — ô trống thì không hiện gì */
+      let list=[];if(v>=1000)list.push(v);[1000,10000,100000,1000000].forEach(m=>{const x=v*m;if(x<=999999999999&&list.indexOf(x)<0)list.push(x);});list=list.slice(0,6);
       mq.innerHTML=list.map(x=>'<button type="button" class="mq" data-v="'+x+'">'+x.toLocaleString('vi-VN')+'</button>').join('');};
     inp.insertAdjacentElement('afterend',mq);mqRender();
     inp.addEventListener('input',mqRender);
@@ -233,6 +233,10 @@ function renderProducts(){
   document.getElementById('prodGroupChips').innerHTML=
     '<button class="chip'+(prodGroupFilter==='__alerts'?' active':'')+'" data-group="__alerts">⚠ Có cảnh báo</button>'+
     [''].concat(groups()).map(g=>'<button class="chip'+(prodGroupFilter===g?' active':'')+'" data-group="'+esc(g)+'">'+(g||'Tất cả')+'</button>').join('');
+  /* v2.6.0: nút Bộ lọc hiển thị luôn trạng thái đang lọc + mở/đóng panel */
+  const bf=document.getElementById('btnProdFilter');
+  if(bf){const lbl=prodGroupFilter==='__alerts'?'Có cảnh báo':(prodGroupFilter||'');const open=!document.getElementById('prodFilterPanel').classList.contains('hidden');
+    bf.textContent='Bộ lọc'+(lbl?': '+lbl:'')+(open?' ▴':' ▾');bf.classList.toggle('on-filter',!!prodGroupFilter);bf.setAttribute('aria-expanded',open?'true':'false');}
   const list=DB.products.filter(p=>
     (prodGroupFilter==='__alerts'?productAlerts(p).length>0:(!prodGroupFilter||p.group===prodGroupFilter))&&
     (!q||normVN(p.name).includes(q)||normVN(p.code||'').includes(q)||normVN(p.group||'').includes(q)||(p.barcode||'').includes(q)));
@@ -254,6 +258,8 @@ function renderProducts(){
 document.getElementById('prodSearch').addEventListener('input',renderProducts);
 document.getElementById('prodSort').addEventListener('change',e=>{prodSort=e.target.value;renderProducts();});
 document.getElementById('btnDebtOnly').addEventListener('click',e=>{custDebtOnly=!custDebtOnly;e.currentTarget.classList.toggle('on',custDebtOnly);renderDebts();});
+document.getElementById('btnProdFilter').addEventListener('click',()=>{document.getElementById('prodFilterPanel').classList.toggle('hidden');renderProducts();});
+document.getElementById('btnVillageFilter').addEventListener('click',()=>{document.getElementById('villageFilterPanel').classList.toggle('hidden');renderDebts();});
 document.getElementById('prodGroupChips').addEventListener('click',e=>{
   const b=e.target.closest('[data-group]');if(b){prodGroupFilter=b.dataset.group;renderProducts();}});
 document.getElementById('productList').addEventListener('click',e=>{
@@ -547,6 +553,9 @@ function renderDebts(){
   document.getElementById('villageChips').innerHTML=
     '<button class="chip'+(villageFilter===''?' active':'')+'" data-v="">Tất cả thôn</button>'+
     DB.villages.map(v=>'<button class="chip'+(villageFilter===v.id?' active':'')+'" data-v="'+v.id+'">'+esc(v.name)+'</button>').join('');
+  const vf=document.getElementById('btnVillageFilter');
+  if(vf){const vv=DB.villages.find(v=>v.id===villageFilter);const open=!document.getElementById('villageFilterPanel').classList.contains('hidden');
+    vf.textContent='Bộ lọc'+(vv?': '+vv.name:'')+(open?' ▴':' ▾');vf.classList.toggle('on-filter',!!villageFilter);vf.setAttribute('aria-expanded',open?'true':'false');}
   const q=normVN(document.getElementById('custSearch').value||'');
   const groups={};
   for(const c of DB.customers){
@@ -1237,7 +1246,15 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    dưới mọi ô nhập tiền trong modal.
    v2.5.8 (Cruz: gợi ý tiền phải theo số đang gõ như app ngân hàng): gợi
    ý tính động từ số đang nhập — gõ "5" -> 5.000/50.000/500.000/5.000.000;
-   ô trống hiện các mức phổ biến. Xong bản này là bàn giao được. */
+   ô trống hiện các mức phổ biến. Xong bản này là bàn giao được.
+   v2.6.0 (Cruz gửi ảnh iPhone: tab Sản phẩm loằng ngoằng + dặn gợi ý
+   tiền chỉ hiện khi bắt đầu gõ + "duyệt 1 vòng sửa cho khoa học"):
+   (1) gợi ý tiền chỉ xuất hiện khi đã gõ số, ô trống không hiện;
+   (2) chips nhóm hàng (Sản phẩm) và chips thôn (Công nợ) thu vào panel
+   sau nút "Bộ lọc" — nút hiện luôn trạng thái đang lọc; nút quản lý
+   nhóm/thôn chuyển vào trong panel; (3) lọc ngày Thu chi xếp 1 hàng
+   "từ … đến …"; danger-zone mobile mọi nút full hàng; cột Thôn trong
+   bảng thống kê nợ không xuống dòng giữa chữ. */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
