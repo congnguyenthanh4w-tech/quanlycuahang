@@ -139,7 +139,7 @@ function openModal(html){modalBox.innerHTML='<button class="close-x" id="modalCl
     wrap.querySelector('.filepick-btn').onclick=()=>inp.click();
     inp.addEventListener('change',()=>{const f=inp.files&&inp.files[0];nameEl.textContent=f?f.name:'Chưa chọn tệp';});});
   if(!('ontouchstart' in window))setTimeout(()=>{const f=modalBox.querySelector('input:not([type="file"]):not([type="date"]):not([type="datetime-local"]),select,textarea');if(f)f.focus();},70);}
-function closeModal(){_scanCb=null;modalWrap.classList.add('hidden');modalBox.innerHTML='';}
+function closeModal(){if(_mediaUploading){toast('Đang tải tệp lên — chờ tải xong đã nhé.');return;}_scanCb=null;modalWrap.classList.add('hidden');modalBox.innerHTML='';}
 /* v2.6.2: ảnh đính kèm chỉ hiện THUMBNAIL nhỏ; bấm vào mới xem ảnh lớn
    toàn màn hình (Cruz yêu cầu) — áp cho ảnh sản phẩm, chứng từ nợ,
    ảnh hoá đơn, chứng từ thu chi và cả ảnh xem trước trong form. */
@@ -187,7 +187,21 @@ function fileToDataURL(input,cb){
    đếm dung lượng đã dùng (DB.mediaUsage.bytes), cảnh báo và chặn khi
    gần đầy/đầy để khách liên hệ nâng cấp. */
 const MEDIA_QUOTA=5*1024*1024*1024, MEDIA_MAX_FILE=100*1024*1024;
-let _storageRoot=null;
+let _storageRoot=null,_mediaUploading=false;
+/* Nhận diện loại tệp: nhiều tệp trích từ camera/điện thoại KHÔNG có
+   type chuẩn (trống) — phải nhìn cả đuôi tệp, nếu không app tưởng là
+   ảnh, nén thất bại và báo lỗi chết cả form (khách gặp "không tải
+   được"). */
+function mediaKind(f){const t=(f.type||'').toLowerCase();
+  if(t.indexOf('video/')===0)return'video';
+  if(t.indexOf('image/')===0)return'image';
+  const ext=(((f&&f.name)||'').split('.').pop()||'').toLowerCase();
+  if(['mp4','mov','m4v','webm','3gp','3gpp','mkv','avi'].indexOf(ext)>=0)return'video';
+  if(['jpg','jpeg','png','gif','webp','heic','heif','bmp'].indexOf(ext)>=0)return'image';
+  return'other';}
+function putWithProgress(ref,blob,onP){return new Promise((res,rej)=>{
+  const t=ref.put(blob);
+  t.on('state_changed',s=>{if(onP&&s.totalBytes>0)onP(s.bytesTransferred/s.totalBytes);},rej,()=>res());});}
 function storageRoot(){if(!_fbReady||!_sync.storeId||!window.firebase||!firebase.storage)return null;
   if(!_storageRoot){try{_storageRoot=firebase.storage().ref();}catch(e){return null;}}
   return _storageRoot;}
@@ -211,18 +225,19 @@ function videoPosterBlob(file){return new Promise(res=>{const v=document.createE
     cv.toBlob(b=>{clearTimeout(timer);done(b);},'image/jpeg',0.7);}catch(e){clearTimeout(timer);done(null);}};
   v.onerror=()=>{clearTimeout(timer);done(null);};
   v.src=URL.createObjectURL(file);});}
-async function uploadOneMedia(file){
+async function uploadOneMedia(file,onP){
   const root=storageRoot();if(!root)throw new Error('Chưa kết nối được kho lưu trữ — kiểm tra đăng nhập/mạng rồi thử lại.');
-  const kind=file.type.startsWith('video/')?'video':'image';
+  const kind=mediaKind(file);
+  if(kind==='other')throw new Error('Tệp "'+file.name+'" không phải ảnh/video nên app không nhận.');
   if(kind==='video'&&file.size>MEDIA_MAX_FILE)throw new Error('Video "'+file.name+'" lớn hơn 100MB.');
-  if(kind!=='video'&&!file.type.startsWith('image/'))throw new Error('Tệp "'+file.name+'" không phải ảnh/video.');
-  let blob=file;
-  if(kind==='image')blob=await compressImageBlob(file);
+  let blob=file,ext=(((file.name.split('.').pop()||'').toLowerCase().replace(/[^a-z0-9]/g,''))||(kind==='image'?'jpg':'mp4'));
+  if(kind==='image'){ /* nén cho nhẹ; nén hỏng (vd ảnh HEIC mở bằng
+     trình duyệt không hỗ trợ) thì tải tệp gốc lên thay vì báo lỗi */
+    try{blob=await compressImageBlob(file);ext='jpg';}catch(e){blob=file;}}
   if(mediaUsed()+blob.size>MEDIA_QUOTA)throw new Error('Kho lưu trữ đã đầy (5GB) — hãy liên hệ bên làm app để nâng cấp dung lượng.');
   const id=uid()+Date.now().toString(36);
-  const ext=kind==='image'?'jpg':(((file.name.split('.').pop()||'mp4').toLowerCase().replace(/[^a-z0-9]/g,''))||'mp4');
   const path='stores/'+_sync.storeId+'/media/'+id+'.'+ext;
-  await root.child(path).put(blob);
+  await putWithProgress(root.child(path),blob,onP);
   const url=await root.child(path).getDownloadURL();
   const m={id:id,kind:kind,name:file.name,size:blob.size,path:path,url:url,posterPath:null,posterUrl:null,posterSize:0};
   if(kind==='video'){const pb=await videoPosterBlob(file);
@@ -250,41 +265,72 @@ function initMediaPicker(box,initial){
   const render=()=>{
     box.innerHTML='<div class="mp-grid">'+
       st.items.map((m,i)=>mediaThumbHTML(m,'<button type="button" class="mp-x" data-mprm="'+i+'" title="Bỏ tệp này">✕</button>')).join('')+
-      st.pending.map((f,i)=>'<div class="thumb-media mp-pending"><span>'+(f.type.startsWith('video/')?'🎬':'🖼')+'</span><button type="button" class="mp-x" data-mppd="'+i+'" title="Bỏ tệp này">✕</button></div>').join('')+
+      st.pending.map((f,i)=>'<div class="thumb-media mp-pending"><span>'+(mediaKind(f)==='video'?'🎬':'🖼')+'</span><button type="button" class="mp-x" data-mppd="'+i+'" title="Bỏ tệp này">✕</button></div>').join('')+
       '</div>'+
       '<label class="btn btn-sm mp-add">＋ Thêm ảnh / video<input type="file" accept="image/*,video/*" multiple hidden></label>'+
       '<div class="mp-note">'+(mediaCapable()?'Mỗi video tối đa 100MB, ảnh tự nén cho nhẹ; tệp lưu lên kho riêng của cửa hàng.':'Chưa kết nối kho lưu trữ — tệp lưu tạm trong máy này (video tối đa 4MB).')+(mediaUsed()/MEDIA_QUOTA>=0.8?' ⚠️ Kho đã dùng '+Math.floor(mediaUsed()/MEDIA_QUOTA*100)+'% — sắp đầy, hãy liên hệ bên làm app để nâng cấp dung lượng.':'')+'</div>';
     box.querySelectorAll('[data-mprm]').forEach(b=>b.onclick=()=>{st.removed.push(st.items[+b.dataset.mprm]);st.items.splice(+b.dataset.mprm,1);render();});
     box.querySelectorAll('[data-mppd]').forEach(b=>b.onclick=()=>{st.pending.splice(+b.dataset.mppd,1);render();});
     const inp=box.querySelector('input[type=file]');
-    inp.onchange=()=>{for(const f of inp.files){if(f.type.startsWith('video/')&&f.size>MEDIA_MAX_FILE){toast('Video "'+f.name+'" lớn hơn 100MB — bỏ qua.');continue;}st.pending.push(f);}render();};
+    inp.onchange=()=>{for(const f of inp.files){const k=mediaKind(f);
+      if(k==='other'){toast('Tệp "'+f.name+'" không phải ảnh/video — bỏ qua.');continue;}
+      if(k==='video'&&f.size>MEDIA_MAX_FILE){toast('Video "'+f.name+'" lớn hơn 100MB — bỏ qua.');continue;}
+      st.pending.push(f);}render();};
   };
   render();
   return st;}
 function inlineMedia(f){return new Promise((res,rej)=>{
-  const done=url=>res({id:uid(),kind:f.type.startsWith('video/')?'video':'image',name:f.name,size:f.size,path:null,url:url,posterPath:null,posterUrl:null,posterSize:0});
-  if(f.type.startsWith('image/')){compressImageBlob(f).then(b=>{const r=new FileReader();r.onload=()=>done(r.result);r.onerror=rej;r.readAsDataURL(b);}).catch(rej);}
-  else{if(f.size>4*1024*1024){rej(new Error('Video "'+f.name+'" quá 4MB — kho lưu trữ chưa sẵn sàng nên tạm thời chưa nhận video lớn.'));return;}
-    const r=new FileReader();r.onload=()=>done(r.result);r.onerror=rej;r.readAsDataURL(f);}});}
+  const kind=mediaKind(f);
+  const done=url=>res({id:uid(),kind:kind,name:f.name,size:f.size,path:null,url:url,posterPath:null,posterUrl:null,posterSize:0});
+  if(kind==='image'){compressImageBlob(f).then(b=>{const r=new FileReader();r.onload=()=>done(r.result);r.onerror=rej;r.readAsDataURL(b);}).catch(rej);}
+  else if(kind==='video'){if(f.size>4*1024*1024){rej(new Error('Video "'+f.name+'" quá 4MB — kho lưu trữ chưa sẵn sàng nên tạm thời chưa nhận video lớn.'));return;}
+    const r=new FileReader();r.onload=()=>done(r.result);r.onerror=rej;r.readAsDataURL(f);}
+  else rej(new Error('Tệp "'+f.name+'" không phải ảnh/video.'));});}
+/* Tải tệp khi bấm Lưu — bản v3.0.5 sửa 3 lỗi khách gặp thật:
+   (1) có THANH TIẾN ĐỘ % thật thay vì chỉ chữ "Đang tải…" (video lớn
+       tải lâu mà không biết đang chạy hay đã treo);
+   (2) một tệp lỗi KHÔNG còn làm chết cả biểu mẫu — tệp nào lên được
+       vẫn lưu, tệp lỗi báo tên rõ ràng để thêm lại sau;
+   (3) lỗi mạng chập chờn thì TỰ THỬ LẠI 1 lần trước khi bỏ cuộc.
+   Lỗi storage/* (kho chưa bật/quyền) vẫn lùi về lưu trong máy như cũ. */
 async function collectMedia(box,btn){
   const st=box&&box._mpState;if(!st)return[];
   const out=st.items.slice();
   if(st.pending.length){
+    _mediaUploading=true;
     if(btn){btn.disabled=true;btn.dataset.label=btn.textContent;}
-    let n=0;
+    let prog=box.querySelector('.mp-progress');
+    if(!prog){prog=document.createElement('div');prog.className='mp-progress';box.appendChild(prog);}
+    const weights=st.pending.map(f=>mediaKind(f)==='image'?Math.min(f.size,300*1024):Math.max(f.size,1));
+    const totalAll=weights.reduce((a,b)=>a+b,0)||1;
+    let doneBytes=0;const failed=[];
+    const draw=(i,frac)=>{const pct=Math.min(100,Math.round((doneBytes+weights[i]*(frac||0))/totalAll*100));
+      prog.innerHTML='<div class="mp-prog-line">Đang tải tệp '+(i+1)+'/'+st.pending.length+': <b>'+esc(st.pending[i].name)+'</b> — '+pct+'%</div><div class="mp-bar"><i style="width:'+pct+'%"></i></div><div class="mp-prog-note">Video lớn tải hơi lâu tuỳ mạng — đừng đóng app hay khoá màn hình trong lúc tải.</div>';
+      if(btn)btn.textContent='Đang tải '+(i+1)+'/'+st.pending.length+' — '+pct+'%';};
     try{
-      for(const f of st.pending){n++;
-        if(btn)btn.textContent='Đang tải tệp '+n+'/'+st.pending.length+'…';
-        if(mediaCapable()){
-          try{out.push(await uploadOneMedia(f));}
-          catch(e){ /* kho chưa được bật trên server (lỗi storage/*): lùi về
-             lưu trong máy như bản cũ thay vì báo lỗi chết form. */
-            if(e&&e.code&&String(e.code).indexOf('storage/')===0)out.push(await inlineMedia(f));
-            else throw e;}
+      let storageDead=false;
+      for(let i=0;i<st.pending.length;i++){const f=st.pending[i];draw(i,0);
+        if(storageDead||!mediaCapable()){
+          try{out.push(await inlineMedia(f));}catch(e){failed.push(f.name);}
+        }else{
+          let ok=false;
+          for(let attempt=0;attempt<2&&!ok;attempt++){
+            try{out.push(await uploadOneMedia(f,p=>draw(i,p)));ok=true;}
+            catch(e){
+              if(e&&e.code&&String(e.code).indexOf('storage/')===0){storageDead=true;
+                try{out.push(await inlineMedia(f));ok=true;}catch(e2){failed.push(f.name);}}
+              else if(attempt===0)await new Promise(r=>setTimeout(r,1500));
+              else failed.push(f.name);
+            }
+          }
         }
-        else out.push(await inlineMedia(f));
+        doneBytes+=weights[i];draw(i,1);
       }
-    }finally{if(btn){btn.disabled=false;if(btn.dataset.label)btn.textContent=btn.dataset.label;}}
+    }finally{_mediaUploading=false;
+      if(btn){btn.disabled=false;if(btn.dataset.label)btn.textContent=btn.dataset.label;}
+      if(prog)prog.remove();}
+    if(failed.length){const msg='⚠️ Chưa tải lên được: '+failed.join(', ')+'. Khoản này vẫn lưu với các tệp còn lại — mở lại khoản và thêm lại tệp thiếu sau nhé.';
+      setTimeout(()=>toast(msg),700); /* hiện SAU toast "đã lưu" của form, kẻo bị ghi đè mất */}
   }
   for(const m of st.removed){if(m.path)deleteMediaFiles(m);}
   return out;}
