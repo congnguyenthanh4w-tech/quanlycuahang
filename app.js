@@ -119,14 +119,20 @@ function openModal(html){modalBox.innerHTML='<button class="close-x" id="modalCl
        gõ "5" -> gợi ý 5.000 / 50.000 / 500.000 / 5.000.000; ô đang trống
        thì hiện các mức phổ biến. Bấm 1 gợi ý là điền luôn số tiền đó. */
     const mq=document.createElement('div');mq.className='mq-row';
-    const mqRender=()=>{const raw=inp.value.replace(/[^\d]/g,'');const v=raw?Number(raw):0;
+    const mqRender=()=>{if(inp.dataset.mqdone==='1'){mq.innerHTML='';return;} /* v3.1.5: đã nhập xong/chọn xong thì TẮT gợi ý */
+      const raw=inp.value.replace(/[^\d]/g,'');const v=raw?Number(raw):0;
       if(!v){mq.innerHTML='';return;} /* v2.6.0: chỉ gợi ý KHI ĐÃ BẮT ĐẦU GÕ — ô trống thì không hiện gì */
       if(raw.length>=5){mq.innerHTML='';return;} /* v2.7.0: số đã gõ đủ dài (từ 5 chữ số, VD 60.000 có sẵn) thì thôi gợi ý — tránh nhân bậy ra 60.000.000 như ảnh khách chụp */
       let list=[];if(v>=1000)list.push(v);[1000,10000,100000,1000000].forEach(m=>{const x=v*m;if(x<=999999999999&&list.indexOf(x)<0)list.push(x);});list=list.slice(0,6);
       mq.innerHTML=list.map(x=>'<button type="button" class="mq" data-v="'+x+'">'+x.toLocaleString('vi-VN')+'</button>').join('');};
     inp.insertAdjacentElement('afterend',mq);mqRender();
     inp.addEventListener('input',mqRender);
-    mq.addEventListener('click',e=>{const b=e.target.closest('.mq');if(!b)return;inp.value=Number(b.dataset.v).toLocaleString('vi-VN');inp.dispatchEvent(new Event('input',{bubbles:true}));inp.focus();});});
+    /* v3.1.5 (Cruz: "nhập xong rồi thì tắt nó đi"): rời ô / chọn 1 gợi ý = xong
+       → ẩn hẳn hàng gợi ý; gõ phím sửa lại thì mới hiện tiếp. Trì hoãn khi blur
+       200ms để cú bấm chọn gợi ý kịp trúng trước khi hàng gợi ý biến mất. */
+    inp.addEventListener('keydown',()=>{if(inp.dataset.mqdone==='1')delete inp.dataset.mqdone;});
+    inp.addEventListener('blur',()=>setTimeout(()=>{inp.dataset.mqdone='1';mqRender();},200));
+    mq.addEventListener('click',e=>{const b=e.target.closest('.mq');if(!b)return;inp.value=Number(b.dataset.v).toLocaleString('vi-VN');inp.dataset.mqdone='1';inp.dispatchEvent(new Event('input',{bubbles:true}));inp.focus();});});
   modalBox.querySelectorAll('input[type="file"]').forEach(inp=>{
     inp.classList.add('filepick-native');
     const isVideo=(inp.accept||'').indexOf('video')>=0;
@@ -1712,7 +1718,7 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    nhiều file + video 100MB (vướng giới hạn đồng bộ), nút Bán hàng +
    doanh thu/lợi nhuận, AI (giọng nói/hình ảnh/chat). */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
-const APP_VER='v3.1.4';
+const APP_VER='v3.1.5';
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
 try{const _s=JSON.parse(localStorage.getItem(SYNC_KEY)||'null');if(_s&&typeof _s==='object')_sync=Object.assign(_sync,_s);}catch(e){}
