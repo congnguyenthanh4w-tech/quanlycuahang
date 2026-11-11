@@ -111,6 +111,11 @@ main{max-width:980px;margin:0 auto;padding:20px 14px 80px;width:100%}
 .input:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
 .input.grow{flex:1;min-width:170px}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.searchbar{display:flex;gap:8px;position:sticky;top:0;z-index:40;background:var(--bg);padding:10px 0 8px}
+.searchbar .input{flex:1;min-height:44px}
+.searchbar .btn{min-height:44px}
+.more-btn{display:block;width:100%;margin:12px 0 2px}
+.more-note{text-align:center;color:var(--muted);font-size:13px;margin:8px 0 2px}
 .chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:13px}
 .chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;cursor:pointer;font-size:13.5px;font-weight:500;box-shadow:var(--shadow-sm)}
 .chip:hover{border-color:var(--accent)}

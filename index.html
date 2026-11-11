@@ -115,8 +115,11 @@
         <div class="page-head"><div><h1>Sản phẩm</h1><p>Kho hàng, các lô nhập và hạn sử dụng</p></div></div>
         <div class="cards" id="prodCards"></div>
         <div id="salesBox"></div>
-        <div class="toolbar">
+        <div class="searchbar">
           <input id="prodSearch" class="input grow" type="search" placeholder="Tìm theo tên, mã hoặc barcode…">
+          <button id="btnScan" class="btn">Quét mã vạch</button>
+        </div>
+        <div class="toolbar">
           <select id="prodSort" class="input" title="Sắp xếp sản phẩm">
             <option value="name">Tên A–Z</option>
             <option value="alerts">Có cảnh báo trước</option>
@@ -124,7 +127,6 @@
             <option value="expiry">Sắp hết hạn trước</option>
           </select>
           <button id="btnAddProduct" class="btn btn-primary">＋ Thêm sản phẩm</button>
-          <button id="btnScan" class="btn">Quét mã vạch</button>
           <button id="btnProdFilter" class="btn" aria-expanded="false">Bộ lọc ▾</button>
         </div>
         <div class="filter-panel hidden" id="prodFilterPanel">
