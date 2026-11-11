@@ -274,11 +274,52 @@ async function deleteMediaFiles(m){const root=storageRoot();if(!root||!m||!m.pat
   try{await root.child(m.path).delete();}catch(e){}
   if(m.posterPath)try{await root.child(m.posterPath).delete();}catch(e){}
   mediaAddUsage(-((m.size||0)+(m.posterSize||0)));}
+function storagePathFromUrl(u){try{const m=String(u||'').match(/\/o\/(.+?)\?/);return m?decodeURIComponent(m[1]):null;}catch(e){return null;}}
+/* Ảnh của sản phẩm: bản mới lưu p.images (nhiều ảnh, phần tử đầu là
+   ảnh đại diện = p.image); sản phẩm cũ chỉ có p.image thì bọc lại
+   thành 1 phần tử để dùng chung mọi nơi. */
+function productImages(p){if(!p)return[];
+  if(p.images&&p.images.length)return p.images;
+  if(p.image)return [{id:'legacy',kind:'image',name:'Ảnh sản phẩm',size:0,path:storagePathFromUrl(p.image),url:p.image,posterPath:null,posterUrl:null,posterSize:0}];
+  return [];}
+/* TỰ CHỮA dữ liệu cũ: tệp nào đang lưu NHÚNG trong máy (url data: —
+   di chứng thời kho bị lỗi luật đọc) thì tự tải lên kho thật rồi thay
+   link, để dữ liệu nhẹ lại và đồng bộ chạy tiếp. Chạy 1 lần/cửa hàng
+   sau khi đăng nhập; tệp nào lỗi thì để nguyên, không chặn app. */
+let _migTried=false;
+async function maybeMigrateInlineMedia(){
+  if(_migTried)return;_migTried=true;
+  if(!mediaCapable()||!_sync.storeId)return;
+  const flag='qlch_mig_'+_sync.storeId;
+  try{if(localStorage.getItem(flag))return;}catch(e){}
+  const jobs=[];
+  const scanMedia=arr=>{(arr||[]).forEach(r=>{(r.media||[]).forEach(m=>{if(m&&m.url&&String(m.url).indexOf('data:')===0)jobs.push({rec:m});});});};
+  scanMedia(DB.debts);scanMedia(DB.invoices);scanMedia(DB.cash);
+  (DB.products||[]).forEach(p=>{(p.images||[]).forEach(m=>{if(m&&m.url&&String(m.url).indexOf('data:')===0)jobs.push({rec:m});});
+    if(p.image&&String(p.image).indexOf('data:')===0&&!(p.images&&p.images.length))jobs.push({prod:p});});
+  if(!jobs.length){try{localStorage.setItem(flag,'1');}catch(e){}return;}
+  let moved=0;
+  for(const j of jobs){
+    try{
+      const src=j.rec?j.rec.url:j.prod.image;
+      const blob=await(await fetch(src)).blob();
+      const kind=j.rec?(j.rec.kind||'image'):(blob.type.indexOf('video')===0?'video':'image');
+      const file=new File([blob],(j.rec&&j.rec.name)||(kind==='video'?'video.mp4':'anh.jpg'),{type:blob.type||(kind==='video'?'video/mp4':'image/jpeg')});
+      const m=await uploadOneMedia(file);
+      if(j.rec){j.rec.url=m.url;j.rec.path=m.path;j.rec.posterUrl=m.posterUrl;j.rec.posterPath=m.posterPath;j.rec.posterSize=m.posterSize;j.rec.size=m.size;}
+      else{j.prod.image=m.url;j.prod.images=[m];}
+      moved++;
+    }catch(e){/* để nguyên bản trong máy, lần mở app sau thử lại */}
+  }
+  if(moved){save();renderAll();toast('Đã chuyển '+moved+' tệp đính kèm lên kho lưu trữ — giờ xem được trên mọi máy.');}
+  if(moved===jobs.length){try{localStorage.setItem(flag,'1');}catch(e){}}
+}
 /* Bộ chọn đính kèm trong các form: hiện các tệp đã có (bỏ được), chọn
    thêm nhiều tệp; bấm Lưu mới thật sự tải lên kho. */
 const _pickers={};
 function mediaPickerHTML(){return '<div class="media-picker"></div>';}
-function initMediaPicker(box,initial){
+function initMediaPicker(box,initial,opts){
+  const io=!!(opts&&opts.imagesOnly);
   const st={items:(initial||[]).slice(),removed:[],pending:[]};
   box._mpState=st;
   const render=()=>{
@@ -286,13 +327,14 @@ function initMediaPicker(box,initial){
       st.items.map((m,i)=>mediaThumbHTML(m,'<button type="button" class="mp-x" data-mprm="'+i+'" title="Bỏ tệp này">✕</button>')).join('')+
       st.pending.map((f,i)=>'<div class="thumb-media mp-pending"><span>'+(mediaKind(f)==='video'?'🎬':'🖼')+'</span><button type="button" class="mp-x" data-mppd="'+i+'" title="Bỏ tệp này">✕</button></div>').join('')+
       '</div>'+
-      '<label class="btn btn-sm mp-add">＋ Thêm ảnh / video<input type="file" accept="image/*,video/*" multiple hidden></label>'+
-      '<div class="mp-note">'+(mediaCapable()?'Mỗi video tối đa 100MB, ảnh tự nén cho nhẹ; tệp lưu lên kho riêng của cửa hàng.':'Chưa kết nối kho lưu trữ — tệp lưu tạm trong máy này (video tối đa 4MB).')+(mediaUsed()/MEDIA_QUOTA>=0.8?' ⚠️ Kho đã dùng '+Math.floor(mediaUsed()/MEDIA_QUOTA*100)+'% — sắp đầy, hãy liên hệ bên làm app để nâng cấp dung lượng.':'')+'</div>';
+      '<label class="btn btn-sm mp-add">'+(io?'＋ Thêm ảnh':'＋ Thêm ảnh / video')+'<input type="file" accept="'+(io?'image/*':'image/*,video/*')+'" multiple hidden></label>'+
+      '<div class="mp-note">'+(io?(mediaCapable()?'Chọn được nhiều ảnh cùng lúc; ảnh tự nén cho nhẹ, lưu lên kho riêng của cửa hàng. Ảnh đầu tiên là ảnh đại diện.':'Chưa kết nối kho lưu trữ — ảnh lưu tạm trong máy này.'):(mediaCapable()?'Mỗi video tối đa 100MB, ảnh tự nén cho nhẹ; tệp lưu lên kho riêng của cửa hàng.':'Chưa kết nối kho lưu trữ — tệp lưu tạm trong máy này (video tối đa 4MB).'))+(mediaUsed()/MEDIA_QUOTA>=0.8?' ⚠️ Kho đã dùng '+Math.floor(mediaUsed()/MEDIA_QUOTA*100)+'% — sắp đầy, hãy liên hệ bên làm app để nâng cấp dung lượng.':'')+'</div>';
     box.querySelectorAll('[data-mprm]').forEach(b=>b.onclick=()=>{st.removed.push(st.items[+b.dataset.mprm]);st.items.splice(+b.dataset.mprm,1);render();});
     box.querySelectorAll('[data-mppd]').forEach(b=>b.onclick=()=>{st.pending.splice(+b.dataset.mppd,1);render();});
     const inp=box.querySelector('input[type=file]');
     inp.onchange=()=>{for(const f of inp.files){const k=mediaKind(f);
       if(k==='other'){toast('Tệp "'+f.name+'" không phải ảnh/video — bỏ qua.');continue;}
+      if(io&&k!=='image'){toast('Sản phẩm chỉ nhận ảnh — tệp "'+f.name+'" bị bỏ qua.');continue;}
       if(k==='video'&&f.size>MEDIA_MAX_FILE){toast('Video "'+f.name+'" lớn hơn 100MB — bỏ qua.');continue;}
       st.pending.push(f);}render();};
   };
@@ -486,9 +528,9 @@ document.getElementById('productList').addEventListener('click',e=>{
   const r=e.target.closest('[data-prod]');if(r)openProduct(r.dataset.prod);});
 
 function productForm(p,prefillBarcode){
-  p=p||{name:'',code:'',barcode:prefillBarcode||'',group:groups()[0],unit:'Gói',sellPrice:'',threshold:5,warnDays:30,status:'active',image:'',lots:[],priceHistory:[]};
+  p=p||{name:'',code:'',barcode:prefillBarcode||'',group:groups()[0],unit:'Gói',sellPrice:'',threshold:5,warnDays:30,status:'active',image:'',images:[],lots:[],priceHistory:[]};
   openModal('<h2>'+(p.id?'Sửa sản phẩm':'Thêm sản phẩm')+'</h2><form id="fProd">'+
-    field('Ảnh sản phẩm (chụp hoặc tải lên)','<input type="file" id="pImage" accept="image/*">'+(p.image?'<img class="preview tap-view" id="pPreview" src="'+p.image+'" title="Bấm để xem ảnh lớn">':'<img class="preview hidden tap-view" id="pPreview" title="Bấm để xem ảnh lớn">'))+
+    field('Ảnh sản phẩm (chọn được nhiều ảnh)',mediaPickerHTML())+
     field('Tên sản phẩm *','<input id="pName" required value="'+esc(p.name)+'">')+
     '<div class="grid2">'+field('Mã sản phẩm (để trống = tự sinh)','<input id="pCode" value="'+esc(p.code||'')+'" placeholder="VD: HH001">')+
     field('Barcode','<div class="scan-row"><input id="pBarcode" value="'+esc(p.barcode||'')+'" inputmode="numeric" placeholder="Quét hoặc gõ mã"><button type="button" class="btn" id="pScanBtn">Quét</button></div>')+'</div>'+
@@ -506,28 +548,16 @@ function productForm(p,prefillBarcode){
     field('Hạn dùng của lô này','<input id="pLotExpiry" type="date">')+'</div>')+
     '<div class="actions"><button type="submit" class="btn btn-primary">Lưu sản phẩm</button></div></form>');
   taxSel('pGroup','group');taxSel('pUnit','unit');
-  let imageData=p.image||'',pendingOldImgPath=null;
-  const pathFromUrl=u=>{try{const m=String(u).match(/\/o\/(.+?)\?/);return m?decodeURIComponent(m[1]):null;}catch(e){return null;}};
-  document.getElementById('pImage').addEventListener('change',async e=>{
-    const f=e.target.files&&e.target.files[0];if(!f)return;
-    const pv=document.getElementById('pPreview');
-    if(mediaCapable()){ /* v3.0.0: ảnh sản phẩm cũng lên kho file, khỏi phình dữ liệu đồng bộ */
-      toast('Đang tải ảnh lên…');
-      try{const m=await uploadProductImage(f);
-        if(imageData&&imageData!==m.url){const op=pathFromUrl(imageData);if(op)pendingOldImgPath=op;}
-        imageData=m.url;pv.src=m.url;pv.classList.remove('hidden');toast('Đã tải ảnh sản phẩm.');}
-      catch(err){ if(err&&err.code&&String(err.code).indexOf('storage/')===0){fileToDataURL(e.target,(d)=>{if(d){imageData=d;pv.src=d;pv.classList.remove('hidden');}});}
-        else toast('⚠️ '+(err.message||'Tải ảnh thất bại.')); }
-    }else fileToDataURL(e.target,(d)=>{if(d){imageData=d;pv.src=d;pv.classList.remove('hidden');}});
-  });
+  const pPicker=document.querySelector('#fProd .media-picker');initMediaPicker(pPicker,productImages(p),{imagesOnly:true});
   document.getElementById('pScanBtn').onclick=()=>startScan(code=>fillBarcodeFromScan(code,p.id||null));
   const bcInp=document.getElementById('pBarcode');
   bcInp.addEventListener('change',()=>{const v=bcInp.value.trim();if(v.length>=8){checkBarcodeDup(v,p.id||null);lookupBarcodeName(v);}});
   if(prefillBarcode)lookupBarcodeName(prefillBarcode);
-  document.getElementById('fProd').onsubmit=e=>{e.preventDefault();
+  document.getElementById('fProd').onsubmit=async e=>{e.preventDefault();
     const bcVal=document.getElementById('pBarcode').value.trim();
     if(bcVal){const dupB=DB.products.find(x=>x.barcode===bcVal&&x.id!==p.id);
       if(dupB){alert('Mã vạch này đã thuộc sản phẩm "'+dupB.name+'" — mỗi loại sản phẩm chỉ có một mã vạch. Hãy mở sản phẩm đó để nhập thêm hàng, đừng tạo trùng.');return;}}
+    let media;try{media=await collectMedia(pPicker,e.target.querySelector('[type=submit]'));}catch(err){toast('⚠️ '+(err.message||'Tải ảnh lên thất bại.'));return;}
     const sell=num(document.getElementById('pSell').value);
     if(p.id&&Number(p.sellPrice)!==sell)p.priceHistory.push({date:todayISO(),kind:'Giá bán',price:sell});
     Object.assign(p,{name:document.getElementById('pName').value.trim(),
@@ -535,7 +565,7 @@ function productForm(p,prefillBarcode){
       barcode:document.getElementById('pBarcode').value.trim(),group:document.getElementById('pGroup').value,
       unit:document.getElementById('pUnit').value||'Gói',sellPrice:sell,
       threshold:num(document.getElementById('pThreshold').value),warnDays:num(document.getElementById('pWarn').value),
-      status:document.getElementById('pStatus').value,image:imageData});
+      status:document.getElementById('pStatus').value,image:(media.length?media[0].url:''),images:media});
     let firstLot=false;
     if(!p.id){p.id=uid();
       const lq=num(document.getElementById('pLotQty').value);
@@ -544,7 +574,6 @@ function productForm(p,prefillBarcode){
         if(lp>0)p.priceHistory.push({date:todayISO(),kind:'Giá nhập',price:lp});
         firstLot=true;}
       DB.products.push(p);}
-    if(pendingOldImgPath){const root=storageRoot();if(root)root.child(pendingOldImgPath).delete().catch(()=>{});}
     save();closeModal();renderAll();toast(firstLot?'Đã lưu sản phẩm + nhập lô đầu tiên.':'Đã lưu sản phẩm.');
     /* v2.5.3: lưu xong ĐÓNG LUÔN — trước đây tự mở tiếp trang chi tiết nên
        người dùng phải tắt thêm 1 lần nữa (Cruz phàn nàn 2026-11-10). */
@@ -602,12 +631,14 @@ function openProduct(id){
   const lots=(p.lots||[]).slice().sort((a,b)=>String(a.expiry||'9999').localeCompare(String(b.expiry||'9999')));
   const invValue=(p.lots||[]).reduce((s,l)=>s+(Number(l.qty)||0)*(Number(l.importPrice)||0),0);
   const lastLot=(p.lots||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))[0];
+  const pImgs=productImages(p);
   openModal('<div class="p-head">'+
-    (p.image?'<img class="p-photo" data-full src="'+p.image+'" alt="Ảnh sản phẩm" title="Bấm để xem ảnh lớn">':'<div class="p-photo p-photo-none">📦</div>')+
+    (pImgs.length?'<img class="p-photo" data-full src="'+pImgs[0].url+'" alt="Ảnh sản phẩm" title="Bấm để xem ảnh lớn">':'<div class="p-photo p-photo-none">📦</div>')+
     '<div class="p-head-info"><h2>'+esc(p.name)+'</h2>'+
     '<div class="p-badges"><span class="badge green">'+(p.status==='stopped'?'⏸ Ngừng kinh doanh':'● Đang kinh doanh')+'</span>'+(p.group?'<span class="badge">'+esc(p.group)+'</span>':'')+(p.unit?'<span class="badge">Đơn vị: '+esc(p.unit)+'</span>':'')+'</div>'+
     '<div class="p-code">'+((p.code?'Mã: <b>'+esc(p.code)+'</b>':'')+(p.code&&p.barcode?'<br>':'')+(p.barcode?'Barcode: <b>'+esc(p.barcode)+'</b>':'')||'Chưa có mã / barcode')+'</div>'+
     '</div></div>'+
+    (pImgs.length>1?'<div class="p-gallery">'+mediaThumbsHTML(pImgs)+'</div>':'')+
     (alerts.length?'<div class="p-alerts">'+alerts.map(a=>'<span class="badge '+((a.kind==='expired'||a.kind==='out')?'red':'amber')+'">'+esc(a.label)+'</span>').join('')+'</div>':'')+
     '<div class="sales-grid p-stats">'+
     '<div><small>Tồn kho hiện tại</small><b class="p-stock">'+fmtQty(st)+' <span class="p-unit">'+esc(p.unit||'')+'</span></b><span>'+lots.length+' lô hàng</span></div>'+
@@ -632,7 +663,7 @@ function openProduct(id){
   document.getElementById('btnEditP').onclick=()=>productForm(p);
   document.getElementById('btnStatusP').onclick=()=>{p.status=(p.status==='stopped')?'active':'stopped';save();renderAll();openProduct(id);toast(p.status==='stopped'?'Đã ngừng kinh doanh sản phẩm.':'Đã mở kinh doanh lại.');};
   document.getElementById('btnLot').onclick=()=>lotForm(p);
-  document.getElementById('btnDelP').onclick=()=>{if(confirm('Xoá hẳn sản phẩm “'+p.name+'”?')){armUndo();DB.products=DB.products.filter(x=>x.id!==p.id);save();closeModal();renderAll();toastUndo('Đã xoá sản phẩm.');}};
+  document.getElementById('btnDelP').onclick=()=>{if(confirm('Xoá hẳn sản phẩm “'+p.name+'”?')){armUndo();productImages(p).forEach(m=>{if(m&&m.path)deleteMediaFiles(m);});DB.products=DB.products.filter(x=>x.id!==p.id);save();closeModal();renderAll();toastUndo('Đã xoá sản phẩm.');}};
   modalBox.querySelectorAll('[data-lotdec]').forEach(b=>b.onclick=()=>{const l=p.lots.find(x=>x.id===b.dataset.lotdec);if(l)lotDecForm(p,l);});
   modalBox.querySelectorAll('[data-sell]').forEach(b=>b.onclick=()=>{const l=p.lots.find(x=>x.id===b.dataset.sell);if(l)sellForm(p,l);});
   modalBox.querySelectorAll('[data-lotdel]').forEach(b=>b.onclick=()=>{if(confirm('Xoá lô này?')){armUndo();p.lots=p.lots.filter(x=>x.id!==b.dataset.lotdel);save();openProduct(id);renderAll();toastUndo('Đã xoá lô hàng.');}});
@@ -1754,6 +1785,7 @@ async function bindStore(user){
       syncSaveMeta();updateSyncState();
     },()=>{});
     await firstSyncState();
+    maybeMigrateInlineMedia();
     _unsubState=stateRef().onSnapshot(snap=>{
       if(!snap.exists)return;const d=snap.data();
       if(d&&d.updatedAt>_sync.updatedAt&&d.updatedAt!==_pushingVal)applyRemote(d.data,d.updatedAt);
