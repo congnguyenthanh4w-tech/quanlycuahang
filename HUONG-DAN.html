@@ -15,7 +15,7 @@ b.k{color:#0b6e5f}
 .foot{margin-top:22px;color:#4a5a63;font-size:11.5px;border-top:1px solid #cfe0dc;padding-top:8px}
 </style></head><body>
 <h1>HƯỚNG DẪN SỬ DỤNG — APP QUẢN LÝ CỬA HÀNG</h1>
-<div class="meta">Dành cho người dùng app tại cửa hàng · Link app: <b>cuahangtuyen.vercel.app</b> · Phiên bản app v2.5.0</div>
+<div class="meta">Dành cho người dùng app tại cửa hàng · Link app: <b>cuahangtuyen.vercel.app</b> · Phiên bản app v2.6.0</div>
 
 <h2>1. Mở app và lần đầu sử dụng</h2>
 <ul>
@@ -62,17 +62,39 @@ b.k{color:#0b6e5f}
 <ul>
 <li>Bấm <b>＋ Thêm thu / chi</b> cho các khoản nhập tay: thu khác, thu bổ sung; chi điện nước, vận chuyển, chi phí cửa hàng, chi khác. Mỗi khoản gồm: ngày giờ, loại, số tiền, nội dung, người thực hiện, ảnh chứng từ, ghi chú.</li>
 <li>Các khoản ghi <b>“Tự động từ công nợ…”</b> là app tự tạo khi khách trả nợ / trả nhà cung cấp. Những khoản này bị khoá ở mục Thu chi — muốn sửa hoặc xoá thì vào chính lần trả nợ/thanh toán đó để sửa, tránh lệch sổ.</li>
+<li>Ngay dưới 3 ô tổng kết Thu/Chi/Lãi của kỳ có thêm 1 dòng tham khảo <b>doanh thu + lãi bán hàng</b> của cùng kỳ — dòng này chỉ để xem, <b>không cộng vào Tổng thu</b> (chi tiết bán hàng xem ở mục Sản phẩm) để tránh trùng với tiền khách trả nợ.</li>
 <li>Lọc xem theo khoản thu / khoản chi và theo khoảng ngày ở thanh công cụ phía trên.</li>
+<li><b>Ô nhập tiền</b> (ở mọi form — giá bán, ghi nợ, trả nợ, hoá đơn, thu chi): gõ vài số đầu là app gợi ý sẵn các mức tiền ngay bên dưới, kiểu app ngân hàng — gõ “5” hiện 5.000 / 50.000 / 500.000 / 5.000.000, bấm vào mức đúng là điền xong, khỏi gõ nhiều số 0.</li>
 </ul>
 
-<h2>7. Xuất báo cáo Excel</h2>
+<h2>7. Bán hàng &amp; doanh thu (mới)</h2>
 <ul>
-<li>Bấm <b>Xuất báo cáo Excel</b> (menu trái trên máy tính, nút <b>Excel</b> trên điện thoại, hoặc trên trang Tổng quan) — app tải về 1 file <b>.xlsx</b> gồm 9 trang: Tổng quan · Sản phẩm · Lô hàng · Công nợ khách hàng · Lịch sử trả nợ · Khách hàng · Hoá đơn NCC · Thanh toán NCC · Thu chi.</li>
+<li>Vào chi tiết một sản phẩm → bấm <b>🛒 Bán hàng</b>: nhập số lượng + giá bán (app điền sẵn giá bán của sản phẩm, sửa được) — app <b>tự bốc hàng từ lô có hạn dùng gần nhất trước</b> (hết lô đó mới sang lô hạn xa hơn; trước khi lưu app cho xem trước sẽ trừ lô nào bao nhiêu) và ghi lại doanh thu + lãi. Ngay trong từng lô cũng có nút <b>Bán</b> riêng, dùng khi cần bán đúng lô đó (kiểm hàng thấy thùng nào hụt thì bấm bán ở lô đó).</li>
+<li>Ngay đầu mục Sản phẩm có khối <b>Doanh thu &amp; lợi nhuận</b>: có bộ chọn xem theo <b>Ngày / Tháng / Quý / Năm / Tất cả</b>, hiển thị doanh thu + lãi của kỳ đang chọn và danh sách các lượt bán trong kỳ đó.</li>
+<li>Bấm nhầm thì bấm <b>Xoá</b> ở lượt bán đó — số hàng tự cộng lại vào lô.</li>
+<li>Lưu ý: tiền bán hàng <b>không tự chạy sang mục Thu chi</b> (sổ Thu chi giữ nguyên như cũ); doanh thu xem ở khối Doanh thu &amp; lợi nhuận và trong file Excel (trang "Bán hàng"). Nút <b>− Bớt (huỷ / hao hụt)</b> vẫn dùng cho hàng hỏng, hết hạn, hao hụt — không tính là bán.</li>
+</ul>
+<h2>8. Ảnh / video bằng chứng (mới)</h2>
+<ul>
+<li>Ở form ghi nợ, hoá đơn nhà cung cấp và thu chi: bấm <b>＋ Thêm ảnh / video</b> để chọn <b>nhiều tệp cùng lúc</b> — mỗi video tối đa <b>100MB</b>, ảnh app tự nén cho nhẹ.</li>
+<li><b>Sản phẩm cũng chọn được nhiều ảnh</b> (nút <b>＋ Thêm ảnh</b> trong form sản phẩm) — ảnh đầu tiên là ảnh đại diện; trong trang chi tiết sản phẩm có dải ảnh để bấm xem từng tấm.</li>
+<li>Khi bấm Lưu, app hiện <b>thanh tiến độ %</b> lúc tải tệp; video lớn tải hơi lâu tuỳ mạng — đừng đóng app hay khoá màn hình trong lúc tải. Nếu một tệp bị lỗi, app vẫn lưu các tệp còn lại và báo rõ tên tệp chưa lên được để thêm lại sau.</li>
+<li>Tệp được tải lên kho lưu trữ riêng của cửa hàng nên xem lại được trên mọi máy đã đăng nhập; bấm vào hình thu nhỏ để xem lớn / xem video. Muốn bỏ tệp nào trước khi lưu thì bấm dấu ✕ trên tệp đó.</li>
+<li>Dung lượng kho hiện tại là 5GB — xem mức đã dùng trong <b>Tài khoản &amp; đồng bộ</b> (trong đó có nút <b>🔍 Kiểm tra kho lưu trữ</b> để tự kiểm tra khi thấy tải tệp bất thường); khi gần đầy app sẽ báo ngay trong form để liên hệ nâng cấp.</li>
+</ul>
+<h2>9. Tra cứu nhanh (mới)</h2>
+<ul>
+<li><b>Tìm bằng giọng nói:</b> cạnh các ô tìm kiếm (Sản phẩm / Công nợ KH / Nhà cung cấp) có nút 🎤 — bấm rồi đọc tên hàng / tên khách, app tự điền và tìm (trình duyệt Chrome trên Android hỗ trợ tốt nhất; iPhone có thể không có nút này).</li>
+<li><b>Hỏi đáp nhanh:</b> bấm nút <b>💬</b> ở góc phải dưới → gõ câu hỏi như đang hỏi người: "khách Nguyễn Văn A còn nợ bao nhiêu", "bia hà nội còn bao nhiêu", "hôm nay bán được bao nhiêu", "tháng này lãi bao nhiêu", "ai đang nợ nhiều nhất", "hàng nào sắp hết hạn"… App trả lời ngay từ dữ liệu cửa hàng, không gửi dữ liệu đi đâu.</li>
+</ul>
+<h2>10. Xuất báo cáo Excel</h2>
+<ul>
+<li>Bấm <b>Xuất báo cáo Excel</b> (menu trái trên máy tính, nút <b>Excel</b> trên điện thoại, hoặc trên trang Tổng quan) — app tải về 1 file <b>.xlsx</b> gồm 10 trang: Tổng quan · Sản phẩm · Lô hàng · Công nợ khách hàng · Lịch sử trả nợ · Khách hàng · Hoá đơn NCC · Thanh toán NCC · Bán hàng · Thu chi.</li>
 <li>Mỗi trang có tiêu đề lớn, hàng tiêu đề cột tô màu, cột tiền là số thật (cộng/trừ, sắp xếp trong Excel được), có dòng TỔNG ở cuối.</li>
 <li>Phân biệt: file <b>Excel</b> để xem, gửi, báo cáo; file <b>Sao lưu (.json)</b> để khôi phục dữ liệu vào app.</li>
 </ul>
 
-<h2>8. Tài khoản, đồng bộ &amp; mời người quản lý</h2>
+<h2>11. Tài khoản, đồng bộ &amp; mời người quản lý</h2>
 <p>Các máy (điện thoại, máy tính) đăng nhập cùng một cửa hàng sẽ dùng <strong>chung một bộ dữ liệu</strong>: thêm hàng, ghi nợ ở máy này thì máy kia thấy ngay sau vài giây.</p>
 <ul>
 <li><strong>Đăng nhập:</strong> ngay ở màn hình đầu tiên khi mở app (xem mục 1). Bấm <strong>“Đăng nhập bằng Google”</strong> thì app chuyển sang trang của Google để chọn tài khoản, xong tự quay lại app — chỉ cần làm <strong>một lần</strong> trên mỗi máy.</li>
@@ -82,10 +104,10 @@ b.k{color:#0b6e5f}
 <li>Đã đăng nhập mà mất mạng vẫn dùng bình thường; có mạng trở lại app tự đồng bộ. Nếu hai máy cùng sửa một lúc, bản lưu sau cùng sẽ được giữ.</li>
 <li><strong>Đăng xuất</strong> (trong mục “Tài khoản &amp; đồng bộ”) không xoá dữ liệu trên máy — máy chỉ ngừng đồng bộ, và lần mở app sau sẽ hỏi đăng nhập lại.</li>
 </ul>
-<h2>9. Sao lưu và khôi phục dữ liệu — RẤT QUAN TRỌNG</h2>
+<h2>12. Sao lưu và khôi phục dữ liệu — RẤT QUAN TRỌNG</h2>
 <div class="box">Bản này lưu dữ liệu ngay trên trình duyệt của thiết bị đang dùng. Hãy bấm <b>⬇ Sao lưu</b> thường xuyên để tải file dữ liệu (.json) về máy và cất giữ cẩn thận. Khi đổi máy hoặc lỡ xoá trình duyệt: mở app → bấm <b>⬆ Khôi phục</b> → chọn file sao lưu đó là lấy lại toàn bộ dữ liệu. Nếu lâu chưa sao lưu, trang Tổng quan sẽ hiện dòng nhắc sao lưu.</div>
 
-<h2>10. Mã PIN bảo vệ (tuỳ chọn)</h2>
+<h2>13. Mã PIN bảo vệ (tuỳ chọn)</h2>
 <ul>
 <li>Việc mở app đã được bảo vệ bằng <b>đăng nhập tài khoản</b>. Ngoài ra có thể đặt thêm mã PIN <b>6 chữ số</b>: bấm <b>🔐 Mã PIN bảo vệ</b> (menu trái, hoặc dải ở cuối trang) → đặt PIN.</li>
 <li>Mã PIN dùng để xác nhận trước khi <b>Xoá toàn bộ dữ liệu</b> hoặc <b>Khôi phục dữ liệu</b> — tránh bấm nhầm hoặc người khác táy máy xoá/ghi đè sổ sách.</li>
@@ -93,13 +115,13 @@ b.k{color:#0b6e5f}
 </ul>
 <div class="warn">⚠️ <b>Quên mã PIN thì không xoá / khôi phục được dữ liệu.</b> Hãy nhớ kỹ mã PIN và sao lưu dữ liệu thường xuyên.</div>
 
-<h2>11. Xoá toàn bộ dữ liệu (bắt đầu lại từ đầu)</h2>
+<h2>14. Xoá toàn bộ dữ liệu (bắt đầu lại từ đầu)</h2>
 <ul>
 <li>Bấm <b>Xoá toàn bộ dữ liệu</b> ở cuối trang hoặc menu trái → nhập mã PIN (nếu đã đặt) → xác nhận.</li>
 <li>Trước khi xoá, app <b>tự tải xuống 1 bản sao lưu</b> để cần thì khôi phục lại. Sau khi xoá, app trống như mới cài (giữ sẵn 5 thôn mặc định).</li>
 </ul>
 
-<h2>12. Mẹo dùng nhanh</h2>
+<h2>15. Mẹo dùng nhanh</h2>
 <ul>
 <li><b>Ô nhập tiền tự chèn dấu chấm:</b> cứ gõ 1500000, app tự hiện 1.500.000.</li>
 <li><b>Tìm kiếm không cần dấu:</b> gõ “tuyen”, “nuoc ngot” vẫn tìm được.</li>
@@ -108,5 +130,5 @@ b.k{color:#0b6e5f}
 <li>Ảnh bằng chứng/chứng từ cứ chụp thẳng bằng điện thoại trong lúc nhập, app tự nén ảnh cho nhẹ. Video bằng chứng nhận file tối đa 4MB.</li>
 </ul>
 
-<div class="foot">Hướng dẫn sử dụng app Quản Lý Cửa Hàng — bản v2.4.0. Đăng nhập tài khoản để các máy dùng chung một bộ dữ liệu của cửa hàng.</div>
+<div class="foot">Hướng dẫn sử dụng app Quản Lý Cửa Hàng — bản v2.6.0. Đăng nhập tài khoản để các máy dùng chung một bộ dữ liệu của cửa hàng.</div>
 </body></html>
