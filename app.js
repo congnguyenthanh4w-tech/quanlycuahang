@@ -225,6 +225,24 @@ function videoPosterBlob(file){return new Promise(res=>{const v=document.createE
     cv.toBlob(b=>{clearTimeout(timer);done(b);},'image/jpeg',0.7);}catch(e){clearTimeout(timer);done(null);}};
   v.onerror=()=>{clearTimeout(timer);done(null);};
   v.src=URL.createObjectURL(file);});}
+/* Kiểm tra kho: ghi thử tệp nhỏ + tệp 2MB rồi xoá, in MÃ LỖI THẬT
+   ra màn hình — để chẩn đoán tận gốc khi tải ảnh/video thất bại
+   (trước đây lỗi bị cơ chế dự phòng nuốt mất). */
+async function probeStorage(out){
+  const line=t=>{out.classList.remove('hidden');out.innerHTML=t;};
+  if(!mediaCapable()){line('❌ App chưa nối được kho lưu trữ (chưa đăng nhập xong hoặc kho chưa bật trên server).');return;}
+  const base='stores/'+_sync.storeId+'/media/',stamp=Date.now();
+  const tiny=_st.root.child(base+'_kt_'+stamp+'.txt');
+  try{await tiny.putString('kiem tra kho');}
+  catch(e){line('❌ Bước 1 — ghi tệp nhỏ lỗi: <strong>'+esc(e.code||'không mã')+'</strong> — '+esc(e.message||''));return;}
+  try{await tiny.getDownloadURL();}
+  catch(e){line('❌ Bước 2 — lấy link xem tệp lỗi: <strong>'+esc(e.code||'không mã')+'</strong> — '+esc(e.message||''));tiny.delete().catch(()=>{});return;}
+  const bigRef=_st.root.child(base+'_kt_'+stamp+'.bin');
+  try{await putWithProgress(bigRef,new Blob([new Uint8Array(2*1024*1024)],{type:'application/octet-stream'}),()=>{});}
+  catch(e){line('⚠️ Tệp nhỏ ghi được — ❌ Bước 3 — ghi tệp 2MB lỗi: <strong>'+esc(e.code||'không mã')+'</strong> — '+esc(e.message||''));tiny.delete().catch(()=>{});return;}
+  tiny.delete().catch(()=>{});bigRef.delete().catch(()=>{});
+  line('✅ Kho hoạt động tốt: ghi tệp nhỏ và tệp 2MB đều thành công.');
+}
 async function uploadOneMedia(file,onP){
   const root=storageRoot();if(!root)throw new Error('Chưa kết nối được kho lưu trữ — kiểm tra đăng nhập/mạng rồi thử lại.');
   const kind=mediaKind(file);
@@ -1823,7 +1841,9 @@ function accountModal(){
       const fmtB=n=>n>=1073741824?(n/1073741824).toFixed(2).replace('.',',')+' GB':n>=1048576?Math.round(n/1048576)+' MB':Math.max(1,Math.round(n/1024))+' KB';
       return '<h3 style="margin:16px 0 6px">Kho ảnh / video đính kèm</h3>'
       +'<div class="usage-bar"><span style="width:'+pc+'%"></span></div>'
-      +'<p class="acc-note">Đã dùng '+fmtB(u)+' / 5 GB ('+pc+'%). Ảnh và video bằng chứng lưu ở kho riêng này, xem được trên mọi máy đăng nhập.'+(pc>=80?' <strong>Kho sắp đầy — hãy liên hệ bên làm app để nâng cấp dung lượng.</strong>':'')+'</p>';})()
+      +'<p class="acc-note">Đã dùng '+fmtB(u)+' / 5 GB ('+pc+'%). Ảnh và video bằng chứng lưu ở kho riêng này, xem được trên mọi máy đăng nhập.'+(pc>=80?' <strong>Kho sắp đầy — hãy liên hệ bên làm app để nâng cấp dung lượng.</strong>':'')+'</p>'
+      +'<div class="acc-actions"><button class="btn" id="accProbe">🔍 Kiểm tra kho lưu trữ</button></div>'
+      +'<p class="acc-note hidden" id="accProbeOut"></p>';})()
     +'<h3 style="margin:16px 0 6px">Người quản lý cửa hàng</h3>'
     +'<div>'+members+'</div>'
     +(_sync.isOwner
@@ -1836,6 +1856,8 @@ function accountModal(){
     +'<div class="acc-actions"><button class="btn btn-ghost" id="accOut">Đăng xuất</button></div>'
     +'<p class="acc-note">Đăng xuất không xoá dữ liệu trên máy này — máy chỉ ngừng đồng bộ cho tới khi đăng nhập lại.</p>');
     const err=m=>{const e=document.getElementById('accErr');e.textContent=m;e.classList.remove('hidden');};
+    const pb=document.getElementById('accProbe');
+    if(pb)pb.onclick=async()=>{pb.disabled=true;pb.textContent='Đang kiểm tra…';try{await probeStorage(document.getElementById('accProbeOut'));}catch(e){}pb.disabled=false;pb.textContent='🔍 Kiểm tra lại kho';};
     if(_sync.isOwner){
       document.getElementById('accInvite').onclick=async()=>{
         const em=document.getElementById('invEmail').value.trim().toLowerCase();
