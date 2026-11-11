@@ -1712,7 +1712,7 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    nhiều file + video 100MB (vướng giới hạn đồng bộ), nút Bán hàng +
    doanh thu/lợi nhuận, AI (giọng nói/hình ảnh/chat). */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
-const APP_VER='v3.1.3';
+const APP_VER='v3.1.4';
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
 try{const _s=JSON.parse(localStorage.getItem(SYNC_KEY)||'null');if(_s&&typeof _s==='object')_sync=Object.assign(_sync,_s);}catch(e){}
@@ -2028,12 +2028,34 @@ function answerQuery(raw){
     const n=DB.customers.filter(c=>customerDebtTotal(c.id)>0).length;
     return 'Khách hàng còn nợ cửa hàng tổng cộng <b>'+fmtMoney(tot)+'</b> (gồm '+n+' khách đang có nợ).';
   }
-  /* tồn kho theo tên sản phẩm */
-  const prod=DB.products.map(p=>({p:p,n: normVN(p.name)})).filter(x=>x.n.length>=3&&s.includes(x.n)).sort((a,b)=>b.n.length-a.n.length)[0];
-  if(prod){
-    const p=prod.p,stock=stockOf(p);
+  /* tồn kho / giá theo tên sản phẩm — hiểu cả "họ hàng": hỏi tên chung
+     ("khẩu trang") thì liệt kê MỌI sản phẩm cùng họ (Khẩu trang, Khẩu trang
+     vải…); hỏi tên đầy đủ một loại thì trả chi tiết đúng loại đó. */
+  const STOPW=new Set('gia bao nhieu con khong ton kho hang san pham nay do la cua het a oi nhe cho hoi xem gium em anh chi bac minh muon biet the nao tien goi hop chai lon tui thung cai chiec bo doi'.split(' '));
+  const detail=p=>{const stock=stockOf(p);
     const lots=(p.lots||[]).filter(l=>(Number(l.qty)||0)>0).map(l=>li('Lô '+fmtDate(l.date)+': còn '+l.qty+' '+esc(p.unit||'')+' · giá nhập '+fmtMoney(l.importPrice)+(l.expiry?' · hạn '+fmtDate(l.expiry):''))).join('');
-    return '<b>'+esc(p.name)+'</b> còn tồn <b>'+stock+' '+esc(p.unit||'')+'</b>, giá bán '+fmtMoney(p.sellPrice||0)+'.'+(lots?'<br>'+lots:'');
+    return '<b>'+esc(p.name)+'</b> còn tồn <b>'+stock+' '+esc(p.unit||'')+'</b>, giá bán '+fmtMoney(p.sellPrice||0)+'.'+(lots?'<br>'+lots:'');};
+  const listOf=(arr,label)=>{const show=arr.slice(0,10);
+    return 'Có <b>'+arr.length+'</b> sản phẩm khớp "'+esc(label)+'":'+show.map(x=>li('<b>'+esc(x.p.name)+'</b> — còn '+stockOf(x.p)+' '+esc(x.p.unit||'')+' · giá bán '+fmtMoney(x.p.sellPrice||0)+(x.p.status==='stopped'?' · <i>ngừng kinh doanh</i>':''))).join('')+(arr.length>show.length?li('… và '+(arr.length-show.length)+' sản phẩm nữa'):'')+'<div style="margin-top:4px">Gõ tên đầy đủ (ví dụ "'+esc(show[0].p.name)+'") để xem chi tiết từng lô.</div>';};
+  const P=DB.products.map(p=>({p:p,n:normVN(p.name)})).filter(x=>x.n.length>=3);
+  const mentioned=P.filter(x=>s.includes(x.n)).sort((a,b)=>b.n.length-a.n.length);
+  if(mentioned.length){
+    const L=mentioned[0];
+    const fam=P.filter(x=>x.n===L.n||x.n.startsWith(L.n+' ')).sort((a,b)=>a.n.length-b.n.length);
+    if(fam.length>1){
+      const rest=s.replace(L.n,' ').replace(/[?.,!]/g,' ').split(/\s+/).filter(w=>w&&!STOPW.has(w));
+      if(!rest.length)return listOf(fam,L.p.name);
+    }
+    return detail(L.p);
+  }
+  /* không nhắc trọn tên nào: bỏ từ hỏi, lấy cụm còn lại mà tìm */
+  const words=s.replace(/[?.,!]/g,' ').split(/\s+/).filter(w=>w&&!STOPW.has(w));
+  if(words.length){
+    const phrase=words.join(' ');
+    let cand=P.filter(x=>x.n.includes(phrase));
+    if(!cand.length)cand=P.filter(x=>words.every(w=>x.n.split(' ').includes(w)));
+    if(cand.length===1)return detail(cand[0].p);
+    if(cand.length>1)return listOf(cand.sort((a,b)=>a.n.length-b.n.length),phrase);
   }
   return 'Tôi chưa hiểu rõ câu này. Bạn thử hỏi kiểu: "khách [tên] còn nợ bao nhiêu", "[tên hàng] còn bao nhiêu", "hôm nay bán được bao nhiêu", "tháng này lãi bao nhiêu", "ai nợ nhiều nhất", "hàng nào sắp hết hạn"…';
 }
