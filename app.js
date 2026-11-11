@@ -765,6 +765,7 @@ function salesPeriodRange(){
   if(spType==='year')return{label:'Năm '+spYear,test:d=>String(d).startsWith(spYear)};
   return{label:'Tất cả thời gian',test:()=>true};
 }
+let _salesOpen=true; /* lịch sử bán: mở sẵn nhưng NÉN trong khung cuộn; bấm "Thu gọn" thì cất hẳn */
 function renderSales(){
   const box=document.getElementById('salesBox');if(!box)return;
   const sumK=(arr,k)=>arr.reduce((a,s)=>a+(Number(s[k])||0),0);
@@ -778,7 +779,15 @@ function renderSales(){
   else if(spType==='month')second='<input type="month" id="spMonth" class="input" value="'+spMonth+'">';
   else if(spType==='quarter')second='<select id="spQuarter" class="input">'+[1,2,3,4].map(q=>'<option value="'+q+'"'+(spQuarter===q?' selected':'')+'>Quý '+q+'</option>').join('')+'</select><select id="spYearQ" class="input">'+years.map(y=>'<option'+(spYear===y?' selected':'')+'>'+y+'</option>').join('')+'</select>';
   else if(spType==='year')second='<select id="spYear" class="input">'+years.map(y=>'<option'+(spYear===y?' selected':'')+'>'+y+'</option>').join('')+'</select>';
-  box.innerHTML='<div class="card sales-card"><h3>💰 Doanh thu & lợi nhuận</h3>'+
+  const saleRow=s=>'<div class="sale-row"><div class="grow"><div class="title">'+esc(s.productName)+' × '+s.qty+'</div><div class="sub">'+fmtDT(s.datetime)+' · Giá bán '+fmtMoney(s.sellPrice)+((s.lots&&s.lots.length>1)?' · Bốc từ '+s.lots.length+' lô (hạn gần nhất trước)':' · Giá nhập '+fmtMoney(s.importPrice))+'</div></div><div class="sale-amt"><b>'+fmtMoney(s.amount)+'</b><span class="'+(s.profit>=0?'green':'red')+'">'+pf(s.profit)+'</span></div><button class="btn btn-small btn-danger" data-saledel="'+s.id+'">Xoá</button></div>';
+  let listHTML='';
+  if(_salesOpen){
+    if(sorted.length)listHTML='<div class="sales-scroll"><div class="sales-recent">'+sorted.slice(0,20).map(saleRow).join('')+'</div></div>'
+      +(sorted.length>20?'<p class="sub" style="color:var(--muted);font-size:13px;margin:8px 0 0">Đang hiển thị 20 lượt gần nhất trong kỳ — tổng cộng '+sorted.length+' lượt.</p>':'');
+    else listHTML=DB.sales.length?'<p class="sub" style="color:var(--muted);font-size:13px;margin:8px 0 0">Chưa có lượt bán nào trong kỳ này.</p>'
+      :'<p class="sub" style="color:var(--muted);font-size:13px;margin:8px 0 0">Chưa có lượt bán nào. Mở một sản phẩm rồi bấm nút 🛒 Bán hàng.</p>';
+  }
+  box.innerHTML='<div class="card sales-card"><div class="sales-head"><h3>💰 Doanh thu & lợi nhuận</h3>'+(DB.sales.length?'<button type="button" class="btn btn-small" data-sales-toggle>'+(_salesOpen?'Thu gọn ▴':'Lịch sử bán ('+arr.length+') ▾')+'</button>':'')+'</div>'+
     '<div class="cash-period"><span class="cp-label">Tổng hợp theo:</span>'+
     '<select id="spType" class="input"><option value="day"'+(spType==='day'?' selected':'')+'>Ngày</option><option value="month"'+(spType==='month'?' selected':'')+'>Tháng</option><option value="quarter"'+(spType==='quarter'?' selected':'')+'>Quý</option><option value="year"'+(spType==='year'?' selected':'')+'>Năm</option><option value="all"'+(spType==='all'?' selected':'')+'>Tất cả</option></select>'+
     second+'<b class="cp-name">'+rng.label+'</b></div>'+
@@ -787,13 +796,13 @@ function renderSales(){
     '<div><small>Lợi nhuận ('+rng.label.toLowerCase()+')</small><b class="'+(sumK(arr,'profit')>=0?'green':'red')+'">'+fmtMoney(sumK(arr,'profit'))+'</b><span class="'+(sumK(arr,'profit')>=0?'green':'red')+'">'+pf(sumK(arr,'profit'))+' gộp</span></div>'+
     '<div><small>Tổng từ trước tới nay</small><b>'+fmtMoney(sumK(DB.sales,'amount'))+'</b><span>'+DB.sales.length+' lượt bán · '+pf(sumK(DB.sales,'profit'))+'</span></div>'+
     '</div>'+
-    (sorted.length?'<div class="sales-recent">'+sorted.slice(0,20).map(s=>'<div class="sale-row"><div class="grow"><div class="title">'+esc(s.productName)+' × '+s.qty+'</div><div class="sub">'+fmtDT(s.datetime)+' · Giá bán '+fmtMoney(s.sellPrice)+((s.lots&&s.lots.length>1)?' · Bốc từ '+s.lots.length+' lô (hạn gần nhất trước)':' · Giá nhập '+fmtMoney(s.importPrice))+'</div></div><div class="sale-amt"><b>'+fmtMoney(s.amount)+'</b><span class="'+(s.profit>=0?'green':'red')+'">'+pf(s.profit)+'</span></div><button class="btn btn-small btn-danger" data-saledel="'+s.id+'">Xoá</button></div>').join('')+'</div>'+
-      (sorted.length>20?'<p class="sub" style="color:var(--muted);font-size:13px;margin:8px 0 0">Đang hiển thị 20 lượt gần nhất trong kỳ — tổng cộng '+sorted.length+' lượt.</p>':'')
-    :(DB.sales.length?'<p class="sub" style="color:var(--muted);font-size:13px;margin:8px 0 0">Chưa có lượt bán nào trong kỳ này.</p>'
-    :'<p class="sub" style="color:var(--muted);font-size:13px;margin:8px 0 0">Chưa có lượt bán nào. Mở một sản phẩm rồi bấm nút 🛒 Bán hàng.</p>'))+
+    listHTML+
     '</div>';
   box.querySelectorAll('[data-saledel]').forEach(b=>b.onclick=()=>deleteSale(b.dataset.saledel));
 }
+document.getElementById('salesBox').addEventListener('click',e=>{
+  if(e.target.closest('[data-sales-toggle]')){_salesOpen=!_salesOpen;renderSales();}
+});
 document.getElementById('salesBox').addEventListener('change',e=>{
   const id=e.target.id,v=e.target.value;
   if(id==='spType'){spType=v;renderSales();}
@@ -1700,7 +1709,7 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    nhiều file + video 100MB (vướng giới hạn đồng bộ), nút Bán hàng +
    doanh thu/lợi nhuận, AI (giọng nói/hình ảnh/chat). */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
-const APP_VER='v3.1.1';
+const APP_VER='v3.1.2';
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
 try{const _s=JSON.parse(localStorage.getItem(SYNC_KEY)||'null');if(_s&&typeof _s==='object')_sync=Object.assign(_sync,_s);}catch(e){}
