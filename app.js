@@ -406,8 +406,8 @@ async function collectMedia(box,btn){
   return out;}
 function mediaThumbHTML(m,extra){
   if(m.kind==='video'){
-    return '<span class="mp-thumb">'+(m.posterUrl?'<img class="thumb-media" data-full data-kind="video" data-fullsrc="'+m.url+'" src="'+m.posterUrl+'" alt="" title="Bấm để xem video">':'<span class="thumb-media mp-vtile" data-full data-kind="video" data-fullsrc="'+m.url+'" title="Bấm để xem video">▶</span>')+(extra||'')+'</span>';}
-  return '<span class="mp-thumb"><img class="thumb-media" data-full src="'+m.url+'" alt="" title="Bấm để xem ảnh lớn">'+(extra||'')+'</span>';}
+    return '<span class="mp-thumb">'+(m.posterUrl?'<img class="thumb-media" loading="lazy" decoding="async" data-full data-kind="video" data-fullsrc="'+m.url+'" src="'+m.posterUrl+'" alt="" title="Bấm để xem video">':'<span class="thumb-media mp-vtile" data-full data-kind="video" data-fullsrc="'+m.url+'" title="Bấm để xem video">▶</span>')+(extra||'')+'</span>';}
+  return '<span class="mp-thumb"><img class="thumb-media" loading="lazy" decoding="async" data-full src="'+m.url+'" alt="" title="Bấm để xem ảnh lớn">'+(extra||'')+'</span>';}
 function mediaThumbsHTML(media){if(!media||!media.length)return '';
   return '<div class="mp-grid" style="margin-top:6px">'+media.map(m=>mediaThumbHTML(m)).join('')+'</div>';}
 
@@ -514,11 +514,11 @@ function renderProducts(){
   document.getElementById('productList').innerHTML=list.length?list.map(p=>{
     const st=stockOf(p),alerts=productAlerts(p);
     return '<div class="row" data-prod="'+p.id+'">'+
-      (p.image?'<img class="thumb" data-full src="'+p.image+'" alt="" title="Bấm để xem ảnh lớn">':'<span class="dot-ico" style="width:52px;height:52px;border-radius:11px;background:var(--surface2);color:var(--muted)">'+ic('i-box')+'</span>')+
+      (p.image?'<img class="thumb" loading="lazy" decoding="async" data-full src="'+p.image+'" alt="" title="Bấm để xem ảnh lớn">':'<span class="dot-ico" style="width:52px;height:52px;border-radius:11px;background:var(--surface2);color:var(--muted)">'+ic('i-box')+'</span>')+
       '<div class="grow"><div class="title">'+esc(p.name)+(p.status==='stopped'?' <span class="badge">Ngừng kinh doanh</span>':'')+'</div>'+
       '<div class="sub">'+esc(p.code||'')+(p.barcode?' · '+esc(p.barcode):'')+' · '+esc(p.group||'')+' · Bán '+fmtMoney(p.sellPrice)+'</div>'+
       alerts.map(a=>'<span class="badge '+((a.kind==='expired'||a.kind==='out')?'red':'amber')+'">'+esc(a.label)+'</span> ').join('')+
-      '</div><div style="text-align:right;flex:none"><div class="sub">Tồn kho</div><b>'+st+' '+esc(p.unit||'')+'</b></div></div>';
+      '</div><div style="text-align:right;flex:none"><div class="sub">Tồn kho</div><b>'+st+' '+esc(p.unit||'')+'</b>'+(st>0?'<div style="margin-top:6px"><button type="button" class="btn btn-small btn-primary" data-sell="'+p.id+'">🛒 Bán</button></div>':'')+'</div></div>';
   }).join(''):'<div class="empty">Chưa có sản phẩm nào khớp. Bấm “＋ Thêm sản phẩm”.</div>';
 }
 document.getElementById('prodSearch').addEventListener('input',renderProducts);
@@ -529,6 +529,8 @@ document.getElementById('btnVillageFilter').addEventListener('click',()=>{docume
 document.getElementById('prodGroupChips').addEventListener('click',e=>{
   const b=e.target.closest('[data-group]');if(b){prodGroupFilter=b.dataset.group;renderProducts();}});
 document.getElementById('productList').addEventListener('click',e=>{
+  const sb=e.target.closest('[data-sell]'); /* nút Bán ngay trên dòng: mở thẳng form bán FEFO, khỏi qua chi tiết */
+  if(sb){const sp=DB.products.find(x=>x.id===sb.dataset.sell);if(sp)sellForm(sp,null,true);return;}
   const r=e.target.closest('[data-prod]');if(r)openProduct(r.dataset.prod);});
 
 function productForm(p,prefillBarcode){
@@ -717,7 +719,7 @@ function sellPlan(p,n){ /* chia số lượng bán vào các lô theo FEFO */
   for(const l of fefoLots(p)){if(rest<=0)break;const take=Math.min(rest,Number(l.qty)||0);
     if(take>0){plan.push({lot:l,qty:take});rest-=take;}}
   return{plan:plan,missing:rest};}
-function sellForm(p,l){
+function sellForm(p,l,fromList){
   const auto=!l; /* l=null: bán tự bốc lô hạn gần nhất trước */
   const totalAvail=auto?stockOf(p):(Number(l.qty)||0);
   openModal('<h2>🛒 Bán hàng — '+esc(p.name)+'</h2><form id="fSell">'+
@@ -744,7 +746,8 @@ function sellForm(p,l){
     let profit=0;const lotsRec=[];
     for(const x of plan){x.lot.qty=(Number(x.lot.qty)||0)-x.qty;profit+=x.qty*(price-(Number(x.lot.importPrice)||0));lotsRec.push({lotId:x.lot.id,qty:x.qty,importPrice:Number(x.lot.importPrice)||0});}
     DB.sales.push({id:uid(),datetime:nowLocal(),productId:p.id,productName:p.name,lotId:lotsRec.length===1?lotsRec[0].lotId:'',qty:n,sellPrice:price,importPrice:lotsRec.length===1?lotsRec[0].importPrice:0,amount:n*price,profit:profit,lots:lotsRec});
-    save();renderAll();toast('Đã bán '+n+' '+esc(p.unit||'')+' — doanh thu '+fmtMoney(n*price)+'.');openProduct(p.id);};
+    save();renderAll();toast('Đã bán '+n+' '+esc(p.unit||'')+' — doanh thu '+fmtMoney(n*price)+'.');
+    if(fromList)closeModal();else openProduct(p.id);};
 }
 function deleteSale(sid){
   const s=DB.sales.find(x=>x.id===sid);if(!s)return;
@@ -1044,7 +1047,7 @@ function openCustomer(id){
     (debts.length?debts.map(d=>{const rem=debtRemain(d);
       return '<div class="sub-block"><div class="head"><b>'+fmtDT(d.datetime)+'</b><span class="money '+(rem>0?'red':'')+'">'+(rem>0?'Còn '+fmtMoney(rem):'Đã trả hết ✓')+'</span></div>'+
       '<div>'+esc(d.note||'(không ghi chú)')+'</div><div class="sub" style="color:var(--muted);font-size:13px">Tổng nợ: '+fmtMoney(d.total)+' · Đã trả: '+fmtMoney(debtPaid(d))+'</div>'+
-      (d.evidence?(String(d.evidence).startsWith('data:video')?'<video class="thumb-media" data-full src="'+d.evidence+'" preload="metadata" muted playsinline title="Bấm để xem lớn"></video>':'<img class="thumb-media" data-full src="'+d.evidence+'" alt="Ảnh chứng từ" title="Bấm để xem ảnh lớn">'):'')+
+      (d.evidence?(String(d.evidence).startsWith('data:video')?'<video class="thumb-media" data-full src="'+d.evidence+'" preload="metadata" muted playsinline title="Bấm để xem lớn"></video>':'<img class="thumb-media" loading="lazy" decoding="async" data-full src="'+d.evidence+'" alt="Ảnh chứng từ" title="Bấm để xem ảnh lớn">'):'')+
       mediaThumbsHTML(d.media)+
       (d.payments&&d.payments.length?'<div style="margin-top:6px">'+payHistoryHtml(d)+'</div>':'')+
       '<div class="actions">'+(rem>0?'<button class="btn btn-small btn-primary" data-pay="'+d.id+'">Ghi trả nợ</button>':'')+
@@ -1185,7 +1188,7 @@ function openSupplier(id){
     (invs.length?invs.map(i=>{const rem=invRemain(i);
       return '<div class="sub-block"><div class="head"><b>Hoá đơn ngày '+fmtDate(i.date)+'</b><span class="money '+(rem>0?'red':'')+'">'+(rem>0?'Còn nợ '+fmtMoney(rem):'Đã trả hết ✓')+'</span></div>'+
       '<div class="sub" style="color:var(--muted);font-size:13px">Tổng: '+fmtMoney(i.total)+' · Đã thanh toán: '+fmtMoney(invPaid(i))+(i.note?' · '+esc(i.note):'')+'</div>'+
-      (i.image?'<img class="thumb-media" data-full src="'+i.image+'" alt="Ảnh hoá đơn" title="Bấm để xem ảnh lớn">':'')+
+      (i.image?'<img class="thumb-media" loading="lazy" decoding="async" data-full src="'+i.image+'" alt="Ảnh hoá đơn" title="Bấm để xem ảnh lớn">':'')+
       mediaThumbsHTML(i.media)+
       (i.payments&&i.payments.length?'<div style="margin-top:6px">'+payHistoryHtml(i)+'</div>':'')+
       '<div class="actions">'+(rem>0?'<button class="btn btn-small btn-primary" data-invpay="'+i.id+'">Thanh toán</button>':'')+
@@ -1280,7 +1283,7 @@ function renderCash(){
   if(csEl){const fThu=list.filter(c=>c.kind==='thu').reduce((s,c)=>s+(Number(c.amount)||0),0),fChi=list.filter(c=>c.kind==='chi').reduce((s,c)=>s+(Number(c.amount)||0),0),fNet=fThu-fChi;
     csEl.innerHTML=list.length?('Khoảng đang xem: <b>'+list.length+' giao dịch</b> · Thu <b class="money green">'+fmtMoney(fThu)+'</b> · Chi <b class="money red">'+fmtMoney(fChi)+'</b> · '+(fNet>=0?'Lãi <b class="money green">':'Lỗ <b class="money red">')+fmtMoney(Math.abs(fNet))+'</b>'):'';}
   document.getElementById('cashList').innerHTML=list.length?list.map(c=>
-    '<div class="row no-click"><span class="dot-ico '+(c.kind==='thu'?'':'chi')+'" style="width:40px;height:40px;border-radius:11px">'+ic(c.kind==='thu'?'i-in':'i-out')+'</span>'+(c.media&&c.media.length?mediaThumbHTML(c.media[0]):(c.evidence&&String(c.evidence).startsWith('data:image')?'<img class="thumb" data-full src="'+c.evidence+'" style="width:44px;height:44px" alt="Ảnh chứng từ" title="Bấm để xem ảnh lớn">':''))+'<div class="grow"><div class="title">'+esc(c.type)+'</div>'+
+    '<div class="row no-click"><span class="dot-ico '+(c.kind==='thu'?'':'chi')+'" style="width:40px;height:40px;border-radius:11px">'+ic(c.kind==='thu'?'i-in':'i-out')+'</span>'+(c.media&&c.media.length?mediaThumbHTML(c.media[0]):(c.evidence&&String(c.evidence).startsWith('data:image')?'<img class="thumb" loading="lazy" decoding="async" data-full src="'+c.evidence+'" style="width:44px;height:44px" alt="Ảnh chứng từ" title="Bấm để xem ảnh lớn">':''))+'<div class="grow"><div class="title">'+esc(c.type)+'</div>'+
     '<div class="sub">'+fmtDT(c.datetime)+(c.content?' · '+esc(c.content):'')+(c.person?' · '+esc(c.person):'')+'</div>'+
     (c.source!=='manual'?'<span class="badge">Tự động từ '+(c.source==='debtPayment'?'công nợ khách':'thanh toán NCC')+' — không sửa tại đây</span>':'')+
     (c.note?'<div class="sub">'+esc(c.note)+'</div>':'')+'</div>'+
@@ -1709,7 +1712,7 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    nhiều file + video 100MB (vướng giới hạn đồng bộ), nút Bán hàng +
    doanh thu/lợi nhuận, AI (giọng nói/hình ảnh/chat). */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
-const APP_VER='v3.1.2';
+const APP_VER='v3.1.3';
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
 try{const _s=JSON.parse(localStorage.getItem(SYNC_KEY)||'null');if(_s&&typeof _s==='object')_sync=Object.assign(_sync,_s);}catch(e){}
