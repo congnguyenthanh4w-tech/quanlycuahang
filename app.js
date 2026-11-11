@@ -230,14 +230,15 @@ function videoPosterBlob(file){return new Promise(res=>{const v=document.createE
    (trước đây lỗi bị cơ chế dự phòng nuốt mất). */
 async function probeStorage(out){
   const line=t=>{out.classList.remove('hidden');out.innerHTML=t;};
-  if(!mediaCapable()){line('❌ App chưa nối được kho lưu trữ (chưa đăng nhập xong hoặc kho chưa bật trên server).');return;}
+  const root=storageRoot();
+  if(!root){line('❌ App chưa nối được kho lưu trữ (chưa đăng nhập xong hoặc kho chưa bật trên server).');return;}
   const base='stores/'+_sync.storeId+'/media/',stamp=Date.now();
-  const tiny=_st.root.child(base+'_kt_'+stamp+'.txt');
+  const tiny=root.child(base+'_kt_'+stamp+'.txt');
   try{await tiny.putString('kiem tra kho');}
   catch(e){line('❌ Bước 1 — ghi tệp nhỏ lỗi: <strong>'+esc(e.code||'không mã')+'</strong> — '+esc(e.message||''));return;}
   try{await tiny.getDownloadURL();}
   catch(e){line('❌ Bước 2 — lấy link xem tệp lỗi: <strong>'+esc(e.code||'không mã')+'</strong> — '+esc(e.message||''));tiny.delete().catch(()=>{});return;}
-  const bigRef=_st.root.child(base+'_kt_'+stamp+'.bin');
+  const bigRef=root.child(base+'_kt_'+stamp+'.bin');
   try{await putWithProgress(bigRef,new Blob([new Uint8Array(2*1024*1024)],{type:'application/octet-stream'}),()=>{});}
   catch(e){line('⚠️ Tệp nhỏ ghi được — ❌ Bước 3 — ghi tệp 2MB lỗi: <strong>'+esc(e.code||'không mã')+'</strong> — '+esc(e.message||''));tiny.delete().catch(()=>{});return;}
   tiny.delete().catch(()=>{});bigRef.delete().catch(()=>{});
@@ -1857,7 +1858,7 @@ function accountModal(){
     +'<p class="acc-note">Đăng xuất không xoá dữ liệu trên máy này — máy chỉ ngừng đồng bộ cho tới khi đăng nhập lại.</p>');
     const err=m=>{const e=document.getElementById('accErr');e.textContent=m;e.classList.remove('hidden');};
     const pb=document.getElementById('accProbe');
-    if(pb)pb.onclick=async()=>{pb.disabled=true;pb.textContent='Đang kiểm tra…';try{await probeStorage(document.getElementById('accProbeOut'));}catch(e){}pb.disabled=false;pb.textContent='🔍 Kiểm tra lại kho';};
+    if(pb)pb.onclick=async()=>{pb.disabled=true;pb.textContent='Đang kiểm tra…';try{await probeStorage(document.getElementById('accProbeOut'));}catch(e){const o=document.getElementById('accProbeOut');if(o){o.classList.remove('hidden');o.textContent='❌ Lỗi khi chạy kiểm tra: '+((e&&e.message)||e);}}pb.disabled=false;pb.textContent='🔍 Kiểm tra lại kho';};
     if(_sync.isOwner){
       document.getElementById('accInvite').onclick=async()=>{
         const em=document.getElementById('invEmail').value.trim().toLowerCase();
