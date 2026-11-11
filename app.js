@@ -118,6 +118,7 @@ function openModal(html){modalBox.innerHTML='<button class="close-x" id="modalCl
     const mq=document.createElement('div');mq.className='mq-row';
     const mqRender=()=>{const raw=inp.value.replace(/[^\d]/g,'');const v=raw?Number(raw):0;
       if(!v){mq.innerHTML='';return;} /* v2.6.0: chỉ gợi ý KHI ĐÃ BẮT ĐẦU GÕ — ô trống thì không hiện gì */
+      if(raw.length>=5){mq.innerHTML='';return;} /* v2.7.0: số đã gõ đủ dài (từ 5 chữ số, VD 60.000 có sẵn) thì thôi gợi ý — tránh nhân bậy ra 60.000.000 như ảnh khách chụp */
       let list=[];if(v>=1000)list.push(v);[1000,10000,100000,1000000].forEach(m=>{const x=v*m;if(x<=999999999999&&list.indexOf(x)<0)list.push(x);});list=list.slice(0,6);
       mq.innerHTML=list.map(x=>'<button type="button" class="mq" data-v="'+x+'">'+x.toLocaleString('vi-VN')+'</button>').join('');};
     inp.insertAdjacentElement('afterend',mq);mqRender();
@@ -252,6 +253,13 @@ document.getElementById('topDebtBox').addEventListener('click',e=>{const r=e.tar
 /* ---------- SẢN PHẨM ---------- */
 let prodGroupFilter='',prodSort='name';
 function renderProducts(){
+  /* v2.7.0 (feedback khách): thêm khối giá trị hàng tồn = tổng giá nhập
+     của toàn bộ hàng đang còn trong kho (số lượng × giá nhập từng lô). */
+  const invValue=DB.products.reduce((s,p)=>s+(p.lots||[]).reduce((a,l)=>a+(Number(l.qty)||0)*(Number(l.importPrice)||0),0),0);
+  document.getElementById('prodCards').innerHTML=
+    statCard('i-coins','blue','Giá trị hàng tồn (theo giá nhập)',fmtMoney(invValue))+
+    statCard('i-box','teal','Số mặt hàng đang bán',DB.products.filter(p=>p.status!=='stopped').length)+
+    statCard('i-alert','amber','Số sản phẩm có cảnh báo',DB.products.filter(p=>productAlerts(p).length>0).length);
   const q=normVN(document.getElementById('prodSearch').value||'');
   document.getElementById('prodGroupChips').innerHTML=
     '<button class="chip'+(prodGroupFilter==='__alerts'?' active':'')+'" data-group="__alerts">⚠ Có cảnh báo</button>'+
@@ -620,8 +628,7 @@ document.getElementById('villageChips').addEventListener('click',e=>{const b=e.t
 document.getElementById('customerList').addEventListener('click',e=>{
   if(e.target.closest('[data-tel]'))return;
   const qp=e.target.closest('[data-qp]');
-  if(qp){const cid=qp.dataset.qp;const d=DB.debts.filter(x=>x.customerId===cid&&debtRemain(x)>0).sort((a,b)=>String(a.datetime).localeCompare(String(b.datetime)))[0];
-    if(d)payDebtForm(d,()=>openCustomer(cid));return;}
+  if(qp){payCustomerForm(customer(qp.dataset.qp));return;}
   const r=e.target.closest('[data-cust]');if(r)openCustomer(r.dataset.cust);});
 document.getElementById('btnVillages').onclick=()=>{
   openModal('<h2>Quản lý thôn</h2><div id="vList">'+
@@ -671,7 +678,7 @@ function openCustomer(id){
     '<div class="kv"><span>Điện thoại</span><b>'+esc(c.phone||'—')+'</b></div>'+
     (c.note?'<div class="kv"><span>Nhận diện</span><b>'+esc(c.note)+'</b></div>':'')+
     '<div class="kv"><span>Tổng còn nợ</span><b class="money red">'+fmtMoney(customerDebtTotal(id))+'</b></div>'+
-    '<div class="actions"><button class="btn btn-primary" id="btnDebt">＋ Ghi khoản nợ mới</button>'+(customerDebtTotal(id)>0?'<button class="btn" id="btnRemind">📋 Nhắc nợ</button>':'')+'<button class="btn" id="btnEditC">✏️ Sửa hồ sơ</button></div>'+
+    '<div class="actions"><button class="btn btn-primary" id="btnDebt">＋ Ghi khoản nợ mới</button>'+(customerDebtTotal(id)>0?'<button class="btn" id="btnPayTotal">💰 Trả nợ</button><button class="btn" id="btnRemind">📋 Nhắc nợ</button>':'')+'<button class="btn" id="btnEditC">✏️ Sửa hồ sơ</button></div>'+
     '<h3 class="sec-title">Các khoản nợ ('+debts.length+')</h3>'+
     (debts.length?debts.map(d=>{const rem=debtRemain(d);
       return '<div class="sub-block"><div class="head"><b>'+fmtDT(d.datetime)+'</b><span class="money '+(rem>0?'red':'')+'">'+(rem>0?'Còn '+fmtMoney(rem):'Đã trả hết ✓')+'</span></div>'+
@@ -692,6 +699,8 @@ function openCustomer(id){
     if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(msg).then(done).catch(()=>{prompt('Sao chép tin nhắc nợ:',msg);});
     else prompt('Sao chép tin nhắc nợ:',msg);};
   document.getElementById('btnDebt').onclick=()=>debtForm(c);
+  const btnPT=document.getElementById('btnPayTotal');
+  if(btnPT)btnPT.onclick=()=>payCustomerForm(c,()=>openCustomer(id));
   modalBox.querySelectorAll('[data-pay]').forEach(b=>b.onclick=()=>payDebtForm(DB.debts.find(d=>d.id===b.dataset.pay),()=>openCustomer(id)));
   modalBox.querySelectorAll('[data-debtdel]').forEach(b=>b.onclick=()=>{if(confirm('Xoá khoản nợ này và lịch sử trả của nó? Các giao dịch thu tự động kèm theo cũng sẽ bị xoá.')){
     const d=DB.debts.find(x=>x.id===b.dataset.debtdel);
@@ -713,6 +722,16 @@ function debtForm(c){
       evidence:evData,evidenceName:evName,payments:[]});
     save();renderAll();toast('Đã ghi khoản nợ.');openCustomer(c.id);};
 }
+/* Ghi 1 lần trả vào 1 khoản nợ + tự sinh đúng 1 khoản thu liên kết. */
+function applyDebtPayment(d,pay){
+  d.payments.push(pay);
+  if(!DB.cash.some(x=>x.source==='debtPayment'&&x.sourceRef===pay.id)){
+    const c=customer(d.customerId);
+    DB.cash.push({id:uid(),datetime:pay.date+'T'+nowLocal().slice(11),kind:'thu',type:'Khách trả nợ',amount:pay.amount,
+      content:'Thu nợ của '+(c?c.name:'khách')+' ('+fmtDT(d.datetime)+')',person:pay.person,evidence:'',note:'',
+      source:'debtPayment',sourceRef:pay.id});
+  }
+}
 function payDebtForm(d,back){
   if(!d)return;
   openModal('<h2>Khách trả nợ</h2>'+
@@ -727,14 +746,34 @@ function payDebtForm(d,back){
   document.getElementById('fPay').onsubmit=e=>{e.preventDefault();
     const amt=num(document.getElementById('payAmt').value);if(amt<=0)return;
     const pay={id:uid(),date:document.getElementById('payDate').value,amount:amt,method:document.getElementById('payMethod').value,person:document.getElementById('payPerson').value.trim()};
-    d.payments.push(pay);
-    if(!DB.cash.some(x=>x.source==='debtPayment'&&x.sourceRef===pay.id)){
-      const c=customer(d.customerId);
-      DB.cash.push({id:uid(),datetime:pay.date+'T'+nowLocal().slice(11),kind:'thu',type:'Khách trả nợ',amount:amt,
-        content:'Thu nợ của '+(c?c.name:'khách')+' ('+fmtDT(d.datetime)+')',person:pay.person,evidence:'',note:'',
-        source:'debtPayment',sourceRef:pay.id});
-    }
+    applyDebtPayment(d,pay);
     save();renderAll();toast('Đã ghi trả nợ + tự ghi khoản thu.');if(back)back();};
+}
+/* v2.7.0 (feedback khách Tuyến): trả nợ theo TỔNG của khách — nhập 1 số
+   tiền ngay ở danh sách/hồ sơ, app tự phân bổ vào các khoản nợ từ CŨ
+   NHẤT tới mới nhất (trước đây nút Trả nợ ở danh sách chỉ mở đúng 1
+   khoản cũ nhất nên khách tưởng app sai tổng nợ). */
+function payCustomerForm(c,back){
+  if(!c)return;
+  const total=customerDebtTotal(c.id);if(total<=0)return;
+  openModal('<h2>Trả nợ — '+esc(c.name)+'</h2>'+
+    '<div class="kv"><span>Tổng còn nợ</span><b class="money red">'+fmtMoney(total)+'</b></div><form id="fPayTotal">'+
+    field('Ngày trả','<input id="ptDate" type="date" value="'+todayISO()+'">')+
+    field('Số tiền khách trả *','<input id="ptAmt" class="mn" inputmode="numeric" required placeholder="VD: '+total.toLocaleString('vi-VN')+'">')+
+    field('Phương thức trả','<select id="ptMethod"><option>Tiền mặt</option><option>Chuyển khoản</option><option>Khác</option></select>')+
+    field('Người thực hiện (ai thu tiền)','<input id="ptPerson" placeholder="VD: Chủ cửa hàng, Thu ngân…">')+
+    '<p style="color:var(--muted);font-size:13px">App tự chia số tiền này vào các khoản nợ <b>từ cũ nhất đến mới nhất</b>; mỗi khoản được trả sẽ tự ghi 1 khoản thu tương ứng ở mục Thu chi.</p>'+
+    '<div class="actions"><button class="btn btn-primary" type="submit">Lưu lần trả</button></div></form>');
+  document.getElementById('fPayTotal').onsubmit=e=>{e.preventDefault();
+    const amt=num(document.getElementById('ptAmt').value);if(amt<=0)return;
+    if(amt>total){toast('Số tiền trả lớn hơn tổng nợ ('+fmtMoney(total)+').');return;}
+    const date=document.getElementById('ptDate').value,method=document.getElementById('ptMethod').value,person=document.getElementById('ptPerson').value.trim();
+    let left=amt,touched=0;
+    const open=DB.debts.filter(x=>x.customerId===c.id&&debtRemain(x)>0).sort((a,b)=>String(a.datetime).localeCompare(String(b.datetime)));
+    for(const d of open){if(left<=0)break;const take=Math.min(debtRemain(d),left);
+      applyDebtPayment(d,{id:uid(),date:date,amount:take,method:method,person:person});left-=take;touched++;}
+    save();renderAll();toast('Đã trả '+fmtMoney(amt)+' — phân bổ vào '+touched+' khoản nợ.');
+    if(back)back();else closeModal();};
 }
 
 /* ---------- NHÀ CUNG CẤP & HOÁ ĐƠN ---------- */
@@ -1286,7 +1325,17 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    mọi ảnh đính kèm — ảnh sản phẩm, chứng từ nợ (ảnh + video), ảnh hoá
    đơn, chứng từ thu chi, ảnh xem trước trong form — chỉ hiện thumbnail
    nhỏ (84px ở chi tiết, 44–54px ở danh sách); bấm vào mở trình xem ảnh
-   lớn toàn màn hình (viewMedia), bấm ra ngoài hoặc ✕ để đóng. */
+   lớn toàn màn hình (viewMedia), bấm ra ngoài hoặc ✕ để đóng.
+   v2.7.0 (feedback khách Tuyến 2026-11-11): (1) nút Trả nợ ở danh sách
+   + trong hồ sơ khách mở form trả theo TỔNG nợ (payCustomerForm), tự
+   phân bổ vào các khoản từ cũ nhất tới mới nhất qua applyDebtPayment —
+   trước đây chỉ mở 1 khoản cũ nhất nên khách tưởng sai tổng; trong từng
+   khoản nợ vẫn trả riêng như cũ (phần trong khách đã khen oke). (2) Chip
+   gợi ý tiền: số đã gõ từ 5 chữ số trở lên thì tắt gợi ý (tránh chip
+   60.000.000 khi ô đã có sẵn 60.000). (3) Tab Sản phẩm thêm thẻ "Giá trị
+   hàng tồn (theo giá nhập)". Chưa làm trong đợt này, chờ chốt: media
+   nhiều file + video 100MB (vướng giới hạn đồng bộ), nút Bán hàng +
+   doanh thu/lợi nhuận, AI (giọng nói/hình ảnh/chat). */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
