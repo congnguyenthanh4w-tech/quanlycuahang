@@ -423,6 +423,10 @@ html[data-theme="dark"] .hero{background:linear-gradient(125deg,#143f36,#1a5146 
 .cash-period .input{width:auto}
 .cash-period input[type="month"]{min-height:40px}
 .cash-period input[type="date"]{min-height:40px}
+.sales-ref{background:var(--accent-soft);border:1px solid var(--line);border-radius:12px;padding:10px 13px;margin-top:10px;font-size:13.5px;line-height:1.5}
+.sales-ref .green{color:var(--ok)}
+.sales-ref .red{color:var(--danger)}
+.sales-ref span{color:var(--muted)}
 .cash-period .cp-name{margin-left:auto;font-size:14.5px}
 
 /* v2.5.7: sửa vỡ layout trên iPhone (WebKit co cột chữ dưới cả số điện thoại

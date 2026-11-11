@@ -1150,6 +1150,10 @@ function renderCash(){
       second+'<b class="cp-name">'+cashPeriodRange().label+'</b>';
   }
   const rng=cashPeriodRange();
+  const srEl=document.getElementById('cashSalesRef');
+  if(srEl){const sArr=DB.sales.filter(s=>rng.test(String(s.datetime)));
+    const sRev=sArr.reduce((a,s)=>a+(Number(s.amount)||0),0),sPf=sArr.reduce((a,s)=>a+(Number(s.profit)||0),0);
+    srEl.innerHTML=sArr.length?'<div class="sales-ref">🛒 Doanh thu bán hàng ('+rng.label.toLowerCase()+'): <b>'+fmtMoney(sRev)+'</b> · '+(sPf>=0?'Lãi':'Lỗ')+' bán hàng: <b class="'+(sPf>=0?'green':'red')+'">'+fmtMoney(Math.abs(sPf))+'</b><span> — xem chi tiết ở mục Sản phẩm; phần này <b>chưa tính</b> vào Tổng thu ở trên để tránh trùng với tiền khách trả nợ.</span></div>':'';}
   const pThu=sum('thu',c=>rng.test(String(c.datetime))),pChi=sum('chi',c=>rng.test(String(c.datetime))),pNet=pThu-pChi;
   document.getElementById('cashCards').innerHTML=
     statCard('i-in','green','Tổng thu',fmtMoney(pThu),'green')+
