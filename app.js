@@ -314,13 +314,18 @@ async function collectMedia(box,btn){
           try{out.push(await inlineMedia(f));}catch(e){failed.push(f.name);}
         }else{
           let ok=false;
+          /* Chỉ các lỗi CẤU HÌNH/kho (hết quota, sai quyền, kho chưa
+             bật) mới lùi về lưu trong máy; lỗi mạng (retry-limit,
+             unknown...) thì thử lại — trước đây gộp chung nên lỗi mạng
+             bị nuốt mất, không thấy mã lỗi thật. */
+          const CFG_CODES=['storage/unauthorized','storage/project-not-found','storage/bucket-not-found','storage/quota-exceeded'];
           for(let attempt=0;attempt<2&&!ok;attempt++){
             try{out.push(await uploadOneMedia(f,p=>draw(i,p)));ok=true;}
-            catch(e){
-              if(e&&e.code&&String(e.code).indexOf('storage/')===0){storageDead=true;
-                try{out.push(await inlineMedia(f));ok=true;}catch(e2){failed.push(f.name);}}
+            catch(e){const code=e&&e.code?String(e.code):((e&&e.message)||'unknown');
+              if(CFG_CODES.indexOf(code)>=0){storageDead=true;
+                try{out.push(await inlineMedia(f));ok=true;}catch(e2){failed.push(f.name+' ['+code+']');}}
               else if(attempt===0)await new Promise(r=>setTimeout(r,1500));
-              else failed.push(f.name);
+              else failed.push(f.name+' ['+code+']');
             }
           }
         }
