@@ -149,7 +149,11 @@ function viewMedia(src,isVideo){
   if(!ov){ov=document.createElement('div');ov.id='mediaView';ov.className='media-view hidden';
     ov.innerHTML='<button type="button" class="mv-close" aria-label="Đóng">✕</button><div class="mv-body"></div>';
     document.body.appendChild(ov);
-    ov.addEventListener('click',()=>{ov.classList.add('hidden');ov.querySelector('.mv-body').innerHTML='';});}
+    /* CHỈ đóng khi bấm vào nền tối hoặc nút ✕ — bấm vào video/ảnh
+       (kể cả nút Play của video) KHÔNG đóng. Trước đây bấm Play là
+       sự kiện nổi bọt lên lớp phủ → video tự tắt (Cruz gặp trên
+       điện thoại 2026-11-11). */
+    ov.addEventListener('click',e=>{if(e.target!==ov&&!e.target.closest('.mv-close'))return;ov.classList.add('hidden');ov.querySelector('.mv-body').innerHTML='';});}
   ov.querySelector('.mv-body').innerHTML=(isVideo||String(src).startsWith('data:video'))
     ?'<video src="'+src+'" controls autoplay playsinline></video>'
     :'<img src="'+src+'" alt="">';
@@ -1696,6 +1700,7 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    nhiều file + video 100MB (vướng giới hạn đồng bộ), nút Bán hàng +
    doanh thu/lợi nhuận, AI (giọng nói/hình ảnh/chat). */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
+const APP_VER='v3.1.1';
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
 try{const _s=JSON.parse(localStorage.getItem(SYNC_KEY)||'null');if(_s&&typeof _s==='object')_sync=Object.assign(_sync,_s);}catch(e){}
@@ -1887,6 +1892,7 @@ function accountModal(){
     +'<p class="acc-err hidden" id="accErr"></p>'
     +'<div class="acc-actions"><button class="btn" id="accPush">⬆ Đẩy lên server ngay</button><button class="btn" id="accPull">⬇ Lấy từ server về</button></div>'
     +'<div class="acc-actions"><button class="btn btn-ghost" id="accOut">Đăng xuất</button></div>'
+    +'<p class="acc-note">Phiên bản app: '+APP_VER+'</p>'
     +'<p class="acc-note">Đăng xuất không xoá dữ liệu trên máy này — máy chỉ ngừng đồng bộ cho tới khi đăng nhập lại.</p>');
     const err=m=>{const e=document.getElementById('accErr');e.textContent=m;e.classList.remove('hidden');};
     const pb=document.getElementById('accProbe');
