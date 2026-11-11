@@ -543,10 +543,11 @@ function openProduct(id){
       '<div class="sub" style="color:var(--muted);font-size:13px">Số lượng: '+l.qty+' · Hạn dùng: '+(l.expiry?fmtDate(l.expiry)+(du!==null?' ('+(du<0?'đã hết hạn '+(-du)+' ngày':'còn '+du+' ngày')+')':''):'—')+'</div>'+
       '<div class="actions"><button class="btn btn-small btn-primary" data-sell="'+l.id+'">🛒 Bán</button><button class="btn btn-small" data-lotdec="'+l.id+'">− Bớt (huỷ / hao hụt)</button><button class="btn btn-small btn-danger" data-lotdel="'+l.id+'">Xoá lô</button></div></div>';}).join('')
       :'<div class="empty">Chưa có lô nhập nào.</div>')+
-    '<div class="actions"><button class="btn btn-primary" id="btnLot">＋ Nhập thêm lô</button><button class="btn" id="btnEditP">✏️ Sửa</button><button class="btn" id="btnStatusP">'+(p.status==='stopped'?'▶ Kinh doanh lại':'⏸ Ngừng kinh doanh')+'</button></div>'+
+    '<div class="actions">'+(st>0?'<button class="btn btn-primary" id="btnSellP">🛒 Bán hàng</button>':'')+'<button class="btn btn-primary" id="btnLot">＋ Nhập thêm lô</button><button class="btn" id="btnEditP">✏️ Sửa</button><button class="btn" id="btnStatusP">'+(p.status==='stopped'?'▶ Kinh doanh lại':'⏸ Ngừng kinh doanh')+'</button></div>'+
     '<h3 class="sec-title">Lịch sử thay đổi giá</h3>'+
     ((p.priceHistory&&p.priceHistory.length)?p.priceHistory.slice().reverse().map(h=>'<div class="kv"><span>'+fmtDate(h.date)+' · '+esc(h.kind)+'</span><b>'+fmtMoney(h.price)+'</b></div>').join(''):'<div class="sub" style="color:var(--muted)">Chưa có thay đổi giá.</div>')+
     '<div class="actions"><button class="btn btn-danger" id="btnDelP">🗑 Xoá sản phẩm</button></div>');
+  const bsp=document.getElementById('btnSellP');if(bsp)bsp.onclick=()=>sellForm(p,null);
   document.getElementById('btnEditP').onclick=()=>productForm(p);
   document.getElementById('btnStatusP').onclick=()=>{p.status=(p.status==='stopped')?'active':'stopped';save();renderAll();openProduct(id);toast(p.status==='stopped'?'Đã ngừng kinh doanh sản phẩm.':'Đã mở kinh doanh lại.');};
   document.getElementById('btnLot').onclick=()=>lotForm(p);
@@ -589,30 +590,52 @@ function lotDecForm(p,l){
    bán + giá nhập tại thời điểm bán để tính doanh thu / lãi gộp. Sổ Thu
    chi KHÔNG tự thêm khoản nào (khách đã quen sổ hiện tại). Xoá một lượt
    bán thì hàng được cộng lại vào lô. */
+/* Thứ tự bốc hàng khi bán: hạn dùng GẦN NHẤT trước (lô không có hạn
+   thì bốc sau cùng), cùng hạn thì lô nhập trước bốc trước. */
+function fefoLots(p){return (p.lots||[]).filter(l=>(Number(l.qty)||0)>0).slice().sort((a,b)=>{
+  const ea=a.expiry||'9999-12-31',eb=b.expiry||'9999-12-31';
+  if(ea!==eb)return ea<eb?-1:1;
+  return String(a.date||'').localeCompare(String(b.date||''));});}
+function sellPlan(p,n){ /* chia số lượng bán vào các lô theo FEFO */
+  const plan=[];let rest=n;
+  for(const l of fefoLots(p)){if(rest<=0)break;const take=Math.min(rest,Number(l.qty)||0);
+    if(take>0){plan.push({lot:l,qty:take});rest-=take;}}
+  return{plan:plan,missing:rest};}
 function sellForm(p,l){
+  const auto=!l; /* l=null: bán tự bốc lô hạn gần nhất trước */
+  const totalAvail=auto?stockOf(p):(Number(l.qty)||0);
   openModal('<h2>🛒 Bán hàng — '+esc(p.name)+'</h2><form id="fSell">'+
-    '<p class="sub" style="color:var(--muted);font-size:13.5px;margin:0 0 10px">Lô nhập '+fmtDate(l.date)+' · Giá nhập '+fmtMoney(l.importPrice)+'/'+esc(p.unit||'cái')+' · Lô đang còn <b>'+l.qty+' '+esc(p.unit||'')+'</b></p>'+
+    (auto
+      ?'<p class="sub" style="color:var(--muted);font-size:13.5px;margin:0 0 10px">App tự bốc hàng từ <b>lô hạn dùng gần nhất</b> trước (hết lô đó mới sang lô hạn xa hơn). Đang còn tổng <b>'+totalAvail+' '+esc(p.unit||'')+'</b>.</p>'
+      :'<p class="sub" style="color:var(--muted);font-size:13.5px;margin:0 0 10px">Lô nhập '+fmtDate(l.date)+' · Giá nhập '+fmtMoney(l.importPrice)+'/'+esc(p.unit||'cái')+' · Lô đang còn <b>'+l.qty+' '+esc(p.unit||'')+'</b></p>')+
     field('Số lượng bán *','<input id="sQty" type="number" min="0" step="any" required value="1">')+
     field('Giá bán (mỗi '+esc(p.unit||'cái')+')','<input id="sPrice" class="mn" inputmode="numeric" value="'+(p.sellPrice?Number(p.sellPrice).toLocaleString('vi-VN'):'')+'">')+
     '<p class="sub" id="sSum" style="font-size:14.5px;margin:2px 0 0"></p>'+
     '<div class="actions"><button class="btn btn-primary" type="submit">Xác nhận bán</button></div></form>');
   const q=document.getElementById('sQty'),pr=document.getElementById('sPrice'),sum=document.getElementById('sSum');
-  const upd=()=>{const n=Number(q.value)||0,price=num(pr.value),pf=n*(price-(Number(l.importPrice)||0));
-    sum.innerHTML='Thành tiền: <b>'+fmtMoney(n*price)+'</b> · '+(pf>=0?'Lãi':'Lỗ')+' dự kiến: <b class="'+(pf>=0?'money green':'money red')+'">'+fmtMoney(Math.abs(pf))+'</b>';};
+  const upd=()=>{const n=Number(q.value)||0,price=num(pr.value);
+    if(!auto){const pf=n*(price-(Number(l.importPrice)||0));
+      sum.innerHTML='Thành tiền: <b>'+fmtMoney(n*price)+'</b> · '+(pf>=0?'Lãi':'Lỗ')+' dự kiến: <b class="'+(pf>=0?'money green':'money red')+'">'+fmtMoney(Math.abs(pf))+'</b>';return;}
+    const r=sellPlan(p,n),pf=r.plan.reduce((a,x)=>a+x.qty*(price-(Number(x.lot.importPrice)||0)),0);
+    sum.innerHTML='Thành tiền: <b>'+fmtMoney(n*price)+'</b> · '+(pf>=0?'Lãi':'Lỗ')+' dự kiến: <b class="'+(pf>=0?'money green':'money red')+'">'+fmtMoney(Math.abs(pf))+'</b>'+
+      (n>0&&r.plan.length?'<br><span style="color:var(--muted);font-size:13px">Sẽ trừ: '+r.plan.map(x=>'lô hạn '+(x.lot.expiry?fmtDate(x.lot.expiry):'—')+' trừ '+x.qty).join(' · ')+(r.missing>0?' · ⚠️ thiếu '+r.missing+' (không đủ hàng)':'')+'</span>':'');};
   q.oninput=upd;pr.addEventListener('input',upd);upd();
   document.getElementById('fSell').onsubmit=e=>{e.preventDefault();
     const n=Number(q.value)||0,price=num(pr.value);
     if(!(n>0)){toast('Hãy nhập số lượng bán.');return;}
-    if(n>l.qty){toast('Lô này chỉ còn '+l.qty+' — không bán quá số đang có được.');return;}
-    l.qty-=n;
-    DB.sales.push({id:uid(),datetime:nowLocal(),productId:p.id,productName:p.name,lotId:l.id,qty:n,sellPrice:price,importPrice:Number(l.importPrice)||0,amount:n*price,profit:n*(price-(Number(l.importPrice)||0))});
+    if(n>totalAvail){toast(auto?'Tổng tồn chỉ còn '+totalAvail+' — không bán quá được.':'Lô này chỉ còn '+l.qty+' — không bán quá số đang có được.');return;}
+    const plan=auto?sellPlan(p,n).plan:[{lot:l,qty:n}];
+    let profit=0;const lotsRec=[];
+    for(const x of plan){x.lot.qty=(Number(x.lot.qty)||0)-x.qty;profit+=x.qty*(price-(Number(x.lot.importPrice)||0));lotsRec.push({lotId:x.lot.id,qty:x.qty,importPrice:Number(x.lot.importPrice)||0});}
+    DB.sales.push({id:uid(),datetime:nowLocal(),productId:p.id,productName:p.name,lotId:lotsRec.length===1?lotsRec[0].lotId:'',qty:n,sellPrice:price,importPrice:lotsRec.length===1?lotsRec[0].importPrice:0,amount:n*price,profit:profit,lots:lotsRec});
     save();renderAll();toast('Đã bán '+n+' '+esc(p.unit||'')+' — doanh thu '+fmtMoney(n*price)+'.');openProduct(p.id);};
 }
 function deleteSale(sid){
   const s=DB.sales.find(x=>x.id===sid);if(!s)return;
-  if(!confirm('Xoá lượt bán "'+s.productName+' × '+s.qty+'"? Số lượng sẽ được cộng lại vào lô hàng.'))return;
+  if(!confirm('Xoá lượt bán "'+s.productName+' × '+s.qty+'"? Số lượng sẽ được cộng lại vào đúng các lô đã trừ.'))return;
   const p=DB.products.find(x=>x.id===s.productId);
-  if(p){const l=(p.lots||[]).find(x=>x.id===s.lotId);if(l)l.qty=(Number(l.qty)||0)+(Number(s.qty)||0);}
+  if(p){const recs=(s.lots&&s.lots.length)?s.lots:(s.lotId?[{lotId:s.lotId,qty:s.qty}]:[]);
+    for(const r of recs){const l=(p.lots||[]).find(x=>x.id===r.lotId);if(l)l.qty=(Number(l.qty)||0)+(Number(r.qty)||0);}}
   DB.sales=DB.sales.filter(x=>x.id!==sid);
   save();renderAll();toast('Đã xoá lượt bán — hàng đã cộng lại vào lô.');
 }
