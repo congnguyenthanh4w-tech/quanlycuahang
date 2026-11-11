@@ -22,6 +22,7 @@ const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
 const nowLocal=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'T'+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
 const fmtMoney=n=>Math.round(Number(n)||0).toLocaleString('vi-VN')+'đ';
+const fmtQty=n=>(Number(n)||0).toLocaleString('vi-VN',{maximumFractionDigits:2});
 const fmtDate=s=>{if(!s)return'—';const[y,m,d]=String(s).slice(0,10).split('-');return d+'/'+m+'/'+y;};
 const fmtDT=s=>{if(!s)return'—';const p=String(s);return fmtDate(p)+(p.includes('T')?' '+p.slice(11,16):'');};
 const daysUntil=s=>{if(!s)return null;const a=new Date(todayISO()+'T00:00:00'),b=new Date(String(s).slice(0,10)+'T00:00:00');return Math.round((b-a)/86400000);};
@@ -529,24 +530,34 @@ function openProduct(id){
   const p=DB.products.find(x=>x.id===id);if(!p)return;
   const st=stockOf(p),alerts=productAlerts(p);
   const lots=(p.lots||[]).slice().sort((a,b)=>String(a.expiry||'9999').localeCompare(String(b.expiry||'9999')));
-  openModal('<h2>'+esc(p.name)+'</h2>'+
-    (p.image?'<img class="thumb-media" data-full src="'+p.image+'" alt="Ảnh sản phẩm" title="Bấm để xem ảnh lớn">':'')+
-    '<div class="kv"><span>Mã / Barcode</span><b>'+esc(p.code||'—')+(p.barcode?' · '+esc(p.barcode):'')+'</b></div>'+
-    '<div class="kv"><span>Nhóm / Đơn vị</span><b>'+esc(p.group||'')+' · '+esc(p.unit||'')+'</b></div>'+
-    '<div class="kv"><span>Giá bán tham khảo</span><b>'+fmtMoney(p.sellPrice)+'</b></div>'+
-    '<div class="kv"><span>Trạng thái</span><b>'+(p.status==='stopped'?'Ngừng kinh doanh':'Đang kinh doanh')+'</b></div>'+
-    '<div class="kv"><span>Tồn kho hiện tại</span><b>'+st+' '+esc(p.unit||'')+'</b></div>'+
-    alerts.map(a=>'<span class="badge '+((a.kind==='expired'||a.kind==='out')?'red':'amber')+'">'+esc(a.label)+'</span> ').join('')+
+  const invValue=(p.lots||[]).reduce((s,l)=>s+(Number(l.qty)||0)*(Number(l.importPrice)||0),0);
+  const lastLot=(p.lots||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))[0];
+  openModal('<div class="p-head">'+
+    (p.image?'<img class="p-photo" data-full src="'+p.image+'" alt="Ảnh sản phẩm" title="Bấm để xem ảnh lớn">':'<div class="p-photo p-photo-none">📦</div>')+
+    '<div class="p-head-info"><h2>'+esc(p.name)+'</h2>'+
+    '<div class="p-badges"><span class="badge green">'+(p.status==='stopped'?'⏸ Ngừng kinh doanh':'● Đang kinh doanh')+'</span>'+(p.group?'<span class="badge">'+esc(p.group)+'</span>':'')+(p.unit?'<span class="badge">Đơn vị: '+esc(p.unit)+'</span>':'')+'</div>'+
+    '<div class="p-code">'+((p.code?'Mã: <b>'+esc(p.code)+'</b>':'')+(p.code&&p.barcode?'<br>':'')+(p.barcode?'Barcode: <b>'+esc(p.barcode)+'</b>':'')||'Chưa có mã / barcode')+'</div>'+
+    '</div></div>'+
+    (alerts.length?'<div class="p-alerts">'+alerts.map(a=>'<span class="badge '+((a.kind==='expired'||a.kind==='out')?'red':'amber')+'">'+esc(a.label)+'</span>').join('')+'</div>':'')+
+    '<div class="sales-grid p-stats">'+
+    '<div><small>Tồn kho hiện tại</small><b class="p-stock">'+fmtQty(st)+' <span class="p-unit">'+esc(p.unit||'')+'</span></b><span>'+lots.length+' lô hàng</span></div>'+
+    '<div><small>Giá bán</small><b>'+fmtMoney(p.sellPrice)+'</b><span>'+(lastLot?'Nhập gần nhất '+fmtMoney(lastLot.importPrice):'Chưa nhập lô nào')+'</span></div>'+
+    '<div><small>Giá trị hàng tồn</small><b>'+fmtMoney(invValue)+'</b><span>tính theo giá nhập</span></div>'+
+    '</div>'+
     '<h3 class="sec-title">Các lô hàng ('+lots.length+')</h3>'+
     (lots.length?lots.map(l=>{const du=l.expiry?daysUntil(l.expiry):null;
-      return '<div class="sub-block"><div class="head"><b>Lô nhập '+fmtDate(l.date)+'</b><span class="money">'+fmtMoney(l.importPrice)+'/'+esc(p.unit||'')+'</span></div>'+
-      '<div class="sub" style="color:var(--muted);font-size:13px">Số lượng: '+l.qty+' · Hạn dùng: '+(l.expiry?fmtDate(l.expiry)+(du!==null?' ('+(du<0?'đã hết hạn '+(-du)+' ngày':'còn '+du+' ngày')+')':''):'—')+'</div>'+
-      '<div class="actions"><button class="btn btn-small btn-primary" data-sell="'+l.id+'">🛒 Bán</button><button class="btn btn-small" data-lotdec="'+l.id+'">− Bớt (huỷ / hao hụt)</button><button class="btn btn-small btn-danger" data-lotdel="'+l.id+'">Xoá lô</button></div></div>';}).join('')
+      const expBadge=!l.expiry?'<span class="badge">Không có hạn dùng</span>'
+        :(du<0?'<span class="badge red">Hạn '+fmtDate(l.expiry)+' · ĐÃ HẾT HẠN '+(-du)+' ngày</span>'
+        :(du<=30?'<span class="badge amber">Hạn '+fmtDate(l.expiry)+' · còn '+du+' ngày</span>'
+        :'<span class="badge">Hạn '+fmtDate(l.expiry)+' · còn '+du+' ngày</span>'));
+      return '<div class="sub-block lot-card"><div class="head"><b>Lô nhập '+fmtDate(l.date)+'</b><span class="money">'+fmtMoney(l.importPrice)+'/'+esc(p.unit||'')+'</span></div>'+
+      '<div class="lot-meta"><span class="lot-qty">Còn <b>'+fmtQty(l.qty)+'</b> '+esc(p.unit||'')+'</span>'+expBadge+'</div>'+
+      '<div class="lot-actions"><button class="btn btn-small btn-primary" data-sell="'+l.id+'">🛒 Bán từ lô này</button><button class="btn btn-small" data-lotdec="'+l.id+'">− Bớt (huỷ / hao hụt)</button><button class="btn btn-small btn-danger" data-lotdel="'+l.id+'">Xoá lô</button></div></div>';}).join('')
       :'<div class="empty">Chưa có lô nhập nào.</div>')+
-    '<div class="actions">'+(st>0?'<button class="btn btn-primary" id="btnSellP">🛒 Bán hàng</button>':'')+'<button class="btn btn-primary" id="btnLot">＋ Nhập thêm lô</button><button class="btn" id="btnEditP">✏️ Sửa</button><button class="btn" id="btnStatusP">'+(p.status==='stopped'?'▶ Kinh doanh lại':'⏸ Ngừng kinh doanh')+'</button></div>'+
+    '<div class="p-actions">'+(st>0?'<button class="btn btn-primary" id="btnSellP">🛒 Bán hàng</button>':'')+'<button class="btn btn-primary" id="btnLot">＋ Nhập thêm lô</button><button class="btn" id="btnEditP">✏️ Sửa thông tin</button><button class="btn" id="btnStatusP">'+(p.status==='stopped'?'▶ Kinh doanh lại':'⏸ Ngừng kinh doanh')+'</button></div>'+
     '<h3 class="sec-title">Lịch sử thay đổi giá</h3>'+
-    ((p.priceHistory&&p.priceHistory.length)?p.priceHistory.slice().reverse().map(h=>'<div class="kv"><span>'+fmtDate(h.date)+' · '+esc(h.kind)+'</span><b>'+fmtMoney(h.price)+'</b></div>').join(''):'<div class="sub" style="color:var(--muted)">Chưa có thay đổi giá.</div>')+
-    '<div class="actions"><button class="btn btn-danger" id="btnDelP">🗑 Xoá sản phẩm</button></div>');
+    ((p.priceHistory&&p.priceHistory.length)?p.priceHistory.slice().reverse().map(h=>'<div class="kv"><span>'+fmtDate(h.date)+'</span><span class="badge '+(h.kind==='Giá bán'?'green':'')+'">'+esc(h.kind)+'</span><b>'+fmtMoney(h.price)+'</b></div>').join(''):'<div class="sub" style="color:var(--muted)">Chưa có thay đổi giá.</div>')+
+    '<div class="p-danger"><button class="btn btn-danger" id="btnDelP">🗑 Xoá sản phẩm này</button></div>');
   const bsp=document.getElementById('btnSellP');if(bsp)bsp.onclick=()=>sellForm(p,null);
   document.getElementById('btnEditP').onclick=()=>productForm(p);
   document.getElementById('btnStatusP').onclick=()=>{p.status=(p.status==='stopped')?'active':'stopped';save();renderAll();openProduct(id);toast(p.status==='stopped'?'Đã ngừng kinh doanh sản phẩm.':'Đã mở kinh doanh lại.');};
@@ -639,26 +650,53 @@ function deleteSale(sid){
   DB.sales=DB.sales.filter(x=>x.id!==sid);
   save();renderAll();toast('Đã xoá lượt bán — hàng đã cộng lại vào lô.');
 }
+/* Lọc doanh thu bán hàng theo kỳ: Ngày / Tháng / Quý / Năm / Tất cả —
+   cùng kiểu bộ chọn với phần Thu chi cho dễ dùng. */
+let spType='month',spDay=todayISO(),spMonth=todayISO().slice(0,7),spQuarter=Math.floor(Number(todayISO().slice(5,7))/3.01)+1,spYear=todayISO().slice(0,4);
+function salesPeriodRange(){
+  if(spType==='day')return{label:'Ngày '+spDay.split('-').reverse().join('/'),test:d=>String(d).startsWith(spDay)};
+  if(spType==='month')return{label:'Tháng '+Number(spMonth.slice(5,7))+'/'+spMonth.slice(0,4),test:d=>String(d).startsWith(spMonth)};
+  if(spType==='quarter'){const ms=[0,1,2].map(i=>spYear+'-'+String((spQuarter-1)*3+1+i).padStart(2,'0'));return{label:'Quý '+spQuarter+'/'+spYear,test:d=>ms.some(m=>String(d).startsWith(m))};}
+  if(spType==='year')return{label:'Năm '+spYear,test:d=>String(d).startsWith(spYear)};
+  return{label:'Tất cả thời gian',test:()=>true};
+}
 function renderSales(){
   const box=document.getElementById('salesBox');if(!box)return;
-  const now=new Date(),dayMs=86400000;
-  const t0=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime(),m0=new Date(now.getFullYear(),now.getMonth(),1).getTime();
-  const inR=(s,a,b)=>{const t=new Date(String(s.datetime).replace(' ','T')).getTime();return t>=a&&t<b;};
   const sumK=(arr,k)=>arr.reduce((a,s)=>a+(Number(s[k])||0),0);
-  const dArr=DB.sales.filter(s=>inR(s,t0,t0+dayMs)),mArr=DB.sales.filter(s=>inR(s,m0,t0+dayMs));
   const pf=(v)=>((v>=0?'Lãi ':'Lỗ ')+fmtMoney(Math.abs(v)));
-  const recent=DB.sales.slice().sort((a,b)=>String(b.datetime).localeCompare(String(a.datetime))).slice(0,8);
+  const rng=salesPeriodRange();
+  const arr=DB.sales.filter(s=>rng.test(String(s.datetime)));
+  const sorted=arr.slice().sort((a,b)=>String(b.datetime).localeCompare(String(a.datetime)));
+  const years=[...new Set(DB.sales.map(s=>String(s.datetime).slice(0,4)).filter(y=>/^\d{4}$/.test(y)).concat([todayISO().slice(0,4)]))].sort().reverse();
+  let second='';
+  if(spType==='day')second='<input type="date" id="spDay" class="input" value="'+spDay+'">';
+  else if(spType==='month')second='<input type="month" id="spMonth" class="input" value="'+spMonth+'">';
+  else if(spType==='quarter')second='<select id="spQuarter" class="input">'+[1,2,3,4].map(q=>'<option value="'+q+'"'+(spQuarter===q?' selected':'')+'>Quý '+q+'</option>').join('')+'</select><select id="spYearQ" class="input">'+years.map(y=>'<option'+(spYear===y?' selected':'')+'>'+y+'</option>').join('')+'</select>';
+  else if(spType==='year')second='<select id="spYear" class="input">'+years.map(y=>'<option'+(spYear===y?' selected':'')+'>'+y+'</option>').join('')+'</select>';
   box.innerHTML='<div class="card sales-card"><h3>💰 Doanh thu & lợi nhuận</h3>'+
+    '<div class="cash-period"><span class="cp-label">Tổng hợp theo:</span>'+
+    '<select id="spType" class="input"><option value="day"'+(spType==='day'?' selected':'')+'>Ngày</option><option value="month"'+(spType==='month'?' selected':'')+'>Tháng</option><option value="quarter"'+(spType==='quarter'?' selected':'')+'>Quý</option><option value="year"'+(spType==='year'?' selected':'')+'>Năm</option><option value="all"'+(spType==='all'?' selected':'')+'>Tất cả</option></select>'+
+    second+'<b class="cp-name">'+rng.label+'</b></div>'+
     '<div class="sales-grid">'+
-    '<div><small>Doanh thu hôm nay</small><b>'+fmtMoney(sumK(dArr,'amount'))+'</b><span class="'+(sumK(dArr,'profit')>=0?'green':'red')+'">'+pf(sumK(dArr,'profit'))+'</span></div>'+
-    '<div><small>Doanh thu tháng này</small><b>'+fmtMoney(sumK(mArr,'amount'))+'</b><span class="'+(sumK(mArr,'profit')>=0?'green':'red')+'">'+pf(sumK(mArr,'profit'))+'</span></div>'+
-    '<div><small>Tổng số lượt bán</small><b>'+DB.sales.length+'</b><span class="'+(sumK(DB.sales,'profit')>=0?'green':'red')+'">Tổng '+pf(sumK(DB.sales,'profit')).toLowerCase()+'</span></div>'+
+    '<div><small>Doanh thu ('+rng.label.toLowerCase()+')</small><b>'+fmtMoney(sumK(arr,'amount'))+'</b><span>'+arr.length+' lượt bán</span></div>'+
+    '<div><small>Lợi nhuận ('+rng.label.toLowerCase()+')</small><b class="'+(sumK(arr,'profit')>=0?'green':'red')+'">'+fmtMoney(sumK(arr,'profit'))+'</b><span class="'+(sumK(arr,'profit')>=0?'green':'red')+'">'+pf(sumK(arr,'profit'))+' gộp</span></div>'+
+    '<div><small>Tổng từ trước tới nay</small><b>'+fmtMoney(sumK(DB.sales,'amount'))+'</b><span>'+DB.sales.length+' lượt bán · '+pf(sumK(DB.sales,'profit'))+'</span></div>'+
     '</div>'+
-    (recent.length?'<div class="sales-recent">'+recent.map(s=>'<div class="sale-row"><div class="grow"><div class="title">'+esc(s.productName)+' × '+s.qty+'</div><div class="sub">'+fmtDT(s.datetime)+' · Giá bán '+fmtMoney(s.sellPrice)+' · Giá nhập '+fmtMoney(s.importPrice)+'</div></div><div class="sale-amt"><b>'+fmtMoney(s.amount)+'</b><span class="'+(s.profit>=0?'green':'red')+'">'+pf(s.profit)+'</span></div><button class="btn btn-small btn-danger" data-saledel="'+s.id+'">Xoá</button></div>').join('')+'</div>'
-    :'<p class="sub" style="color:var(--muted);font-size:13px;margin:8px 0 0">Chưa có lượt bán nào. Mở một sản phẩm, chọn đúng lô hàng rồi bấm nút 🛒 Bán.</p>')+
+    (sorted.length?'<div class="sales-recent">'+sorted.slice(0,20).map(s=>'<div class="sale-row"><div class="grow"><div class="title">'+esc(s.productName)+' × '+s.qty+'</div><div class="sub">'+fmtDT(s.datetime)+' · Giá bán '+fmtMoney(s.sellPrice)+((s.lots&&s.lots.length>1)?' · Bốc từ '+s.lots.length+' lô (hạn gần nhất trước)':' · Giá nhập '+fmtMoney(s.importPrice))+'</div></div><div class="sale-amt"><b>'+fmtMoney(s.amount)+'</b><span class="'+(s.profit>=0?'green':'red')+'">'+pf(s.profit)+'</span></div><button class="btn btn-small btn-danger" data-saledel="'+s.id+'">Xoá</button></div>').join('')+'</div>'+
+      (sorted.length>20?'<p class="sub" style="color:var(--muted);font-size:13px;margin:8px 0 0">Đang hiển thị 20 lượt gần nhất trong kỳ — tổng cộng '+sorted.length+' lượt.</p>':'')
+    :(DB.sales.length?'<p class="sub" style="color:var(--muted);font-size:13px;margin:8px 0 0">Chưa có lượt bán nào trong kỳ này.</p>'
+    :'<p class="sub" style="color:var(--muted);font-size:13px;margin:8px 0 0">Chưa có lượt bán nào. Mở một sản phẩm rồi bấm nút 🛒 Bán hàng.</p>'))+
     '</div>';
   box.querySelectorAll('[data-saledel]').forEach(b=>b.onclick=()=>deleteSale(b.dataset.saledel));
 }
+document.getElementById('salesBox').addEventListener('change',e=>{
+  const id=e.target.id,v=e.target.value;
+  if(id==='spType'){spType=v;renderSales();}
+  else if(id==='spDay'){if(v)spDay=v;renderSales();}
+  else if(id==='spMonth'){if(v)spMonth=v;renderSales();}
+  else if(id==='spQuarter'){spQuarter=Number(v);renderSales();}
+  else if(id==='spYearQ'||id==='spYear'){spYear=v;renderSales();}
+});
 
 /* ---------- quét barcode ----------
    3 tầng: (1) BarcodeDetector có sẵn của trình duyệt; (2) nếu máy không có
