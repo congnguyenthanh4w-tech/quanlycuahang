@@ -39,10 +39,12 @@ function ensureTax(){if(!Array.isArray(DB.groups)||!DB.groups.length)DB.groups=g
 function defaults(){return{
   villages:['Thôn 1','Thôn 2','Thôn 3','Thôn 4','Thôn 5A'].map(name=>({id:uid()+name,name})),
   groups:GROUPS.slice(),units:DEFAULT_UNITS.slice(),
-  customers:[],suppliers:[],products:[],debts:[],invoices:[],cash:[]};}
+  customers:[],suppliers:[],products:[],debts:[],invoices:[],cash:[],sales:[],mediaUsage:{bytes:0}};}
 function normalizeDB(d){
   if(!Array.isArray(d.groups)||!d.groups.length)d.groups=[...new Set([...GROUPS,...d.products.map(x=>x.group).filter(Boolean)])];
   if(!Array.isArray(d.units)||!d.units.length)d.units=[...new Set([...DEFAULT_UNITS,...d.products.map(x=>x.unit).filter(Boolean)])];
+  if(!Array.isArray(d.sales))d.sales=[];
+  if(!d.mediaUsage||typeof d.mediaUsage.bytes!=='number')d.mediaUsage={bytes:0};
   return d;}
 function load(){try{const raw=localStorage.getItem(LS_KEY);if(raw){const d=JSON.parse(raw);if(d&&Array.isArray(d.products))return normalizeDB(d);}}catch(e){}return defaults();}
 function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(DB));}catch(e){toast('⚠️ Bộ nhớ đầy — hãy xoá bớt ảnh hoặc Sao lưu rồi dọn dữ liệu.');}syncTouch();}
@@ -140,14 +142,14 @@ function closeModal(){_scanCb=null;modalWrap.classList.add('hidden');modalBox.in
 /* v2.6.2: ảnh đính kèm chỉ hiện THUMBNAIL nhỏ; bấm vào mới xem ảnh lớn
    toàn màn hình (Cruz yêu cầu) — áp cho ảnh sản phẩm, chứng từ nợ,
    ảnh hoá đơn, chứng từ thu chi và cả ảnh xem trước trong form. */
-function viewMedia(src){
+function viewMedia(src,isVideo){
   if(!src)return;
   let ov=document.getElementById('mediaView');
   if(!ov){ov=document.createElement('div');ov.id='mediaView';ov.className='media-view hidden';
     ov.innerHTML='<button type="button" class="mv-close" aria-label="Đóng">✕</button><div class="mv-body"></div>';
     document.body.appendChild(ov);
     ov.addEventListener('click',()=>{ov.classList.add('hidden');ov.querySelector('.mv-body').innerHTML='';});}
-  ov.querySelector('.mv-body').innerHTML=String(src).startsWith('data:video')
+  ov.querySelector('.mv-body').innerHTML=(isVideo||String(src).startsWith('data:video'))
     ?'<video src="'+src+'" controls autoplay playsinline></video>'
     :'<img src="'+src+'" alt="">';
   ov.classList.remove('hidden');
@@ -155,10 +157,10 @@ function viewMedia(src){
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-full],.tap-view');
   if(!t)return;
-  const src=t.classList.contains('tap-view')?(t.currentSrc||t.src):(t.getAttribute('src')||'');
+  const src=t.dataset.fullsrc||(t.classList.contains('tap-view')?(t.currentSrc||t.src):(t.getAttribute('src')||''));
   if(!src)return;
   e.stopPropagation();e.preventDefault();
-  viewMedia(src);
+  viewMedia(src,t.dataset.kind==='video');
 },true);
 modalWrap.addEventListener('click',e=>{if(e.target===modalWrap)closeModal();});
 function field(label,inner){return '<div class="field"><label>'+label+'</label>'+inner+'</div>';}
@@ -176,6 +178,121 @@ function fileToDataURL(input,cb){
     const r=new FileReader();r.onload=()=>cb(r.result,f.name);r.readAsDataURL(f);
   }
 }
+
+/* ---------- MEDIA LƯU TRÊN FIREBASE STORAGE (v3.0.0) ----------
+   Khách yêu cầu: đính kèm NHIỀU ảnh/video, video tới 100MB. File không
+   còn nhét vào dữ liệu đồng bộ (trần ~1MB/tài liệu) mà tải lên kho file
+   riêng của cửa hàng; dữ liệu chỉ giữ đường link. Gói free 5GB — app tự
+   đếm dung lượng đã dùng (DB.mediaUsage.bytes), cảnh báo và chặn khi
+   gần đầy/đầy để khách liên hệ nâng cấp. */
+const MEDIA_QUOTA=5*1024*1024*1024, MEDIA_MAX_FILE=100*1024*1024;
+let _storageRoot=null;
+function storageRoot(){if(!_fbReady||!_sync.storeId||!window.firebase||!firebase.storage)return null;
+  if(!_storageRoot){try{_storageRoot=firebase.storage().ref();}catch(e){return null;}}
+  return _storageRoot;}
+const mediaCapable=()=>!!storageRoot();
+const mediaUsed=()=>(DB.mediaUsage&&DB.mediaUsage.bytes)||0;
+function mediaAddUsage(n){if(!DB.mediaUsage)DB.mediaUsage={bytes:0};DB.mediaUsage.bytes=Math.max(0,(DB.mediaUsage.bytes||0)+n);}
+function compressImageBlob(file){return new Promise((res,rej)=>{const img=new Image();
+  img.onload=()=>{const max=1000,sc=Math.min(1,max/Math.max(img.width,img.height));
+    const cv=document.createElement('canvas');cv.width=Math.round(img.width*sc);cv.height=Math.round(img.height*sc);
+    cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);URL.revokeObjectURL(img.src);
+    cv.toBlob(b=>b?res(b):rej(new Error('img')),'image/jpeg',0.72);};
+  img.onerror=rej;img.src=URL.createObjectURL(file);});}
+function videoPosterBlob(file){return new Promise(res=>{const v=document.createElement('video');
+  v.muted=true;v.playsInline=true;v.preload='auto';
+  const done=b=>{try{URL.revokeObjectURL(v.src);}catch(e){}res(b);};
+  const timer=setTimeout(()=>done(null),6000);
+  v.onloadeddata=()=>{try{v.currentTime=Math.min(1,(v.duration||2)/2);}catch(e){clearTimeout(timer);done(null);}};
+  v.onseeked=()=>{try{const sc=Math.min(1,320/(v.videoWidth||320));const cv=document.createElement('canvas');
+    cv.width=Math.round((v.videoWidth||320)*sc);cv.height=Math.round((v.videoHeight||240)*sc);
+    cv.getContext('2d').drawImage(v,0,0,cv.width,cv.height);
+    cv.toBlob(b=>{clearTimeout(timer);done(b);},'image/jpeg',0.7);}catch(e){clearTimeout(timer);done(null);}};
+  v.onerror=()=>{clearTimeout(timer);done(null);};
+  v.src=URL.createObjectURL(file);});}
+async function uploadOneMedia(file){
+  const root=storageRoot();if(!root)throw new Error('Chưa kết nối được kho lưu trữ — kiểm tra đăng nhập/mạng rồi thử lại.');
+  const kind=file.type.startsWith('video/')?'video':'image';
+  if(kind==='video'&&file.size>MEDIA_MAX_FILE)throw new Error('Video "'+file.name+'" lớn hơn 100MB.');
+  if(kind!=='video'&&!file.type.startsWith('image/'))throw new Error('Tệp "'+file.name+'" không phải ảnh/video.');
+  let blob=file;
+  if(kind==='image')blob=await compressImageBlob(file);
+  if(mediaUsed()+blob.size>MEDIA_QUOTA)throw new Error('Kho lưu trữ đã đầy (5GB) — hãy liên hệ bên làm app để nâng cấp dung lượng.');
+  const id=uid()+Date.now().toString(36);
+  const ext=kind==='image'?'jpg':(((file.name.split('.').pop()||'mp4').toLowerCase().replace(/[^a-z0-9]/g,''))||'mp4');
+  const path='stores/'+_sync.storeId+'/media/'+id+'.'+ext;
+  await root.child(path).put(blob);
+  const url=await root.child(path).getDownloadURL();
+  const m={id:id,kind:kind,name:file.name,size:blob.size,path:path,url:url,posterPath:null,posterUrl:null,posterSize:0};
+  if(kind==='video'){const pb=await videoPosterBlob(file);
+    if(pb){try{const pp='stores/'+_sync.storeId+'/media/'+id+'_poster.jpg';
+      await root.child(pp).put(pb);m.posterPath=pp;m.posterUrl=await root.child(pp).getDownloadURL();m.posterSize=pb.size;}catch(e){}}}
+  mediaAddUsage(m.size+m.posterSize);
+  return m;}
+async function uploadProductImage(file){
+  const root=storageRoot();if(!root)throw new Error('Chưa kết nối kho lưu trữ.');
+  const blob=await compressImageBlob(file);
+  const path='stores/'+_sync.storeId+'/media/sp-'+uid()+Date.now().toString(36)+'.jpg';
+  await root.child(path).put(blob);
+  return {path:path,url:await root.child(path).getDownloadURL()};}
+async function deleteMediaFiles(m){const root=storageRoot();if(!root||!m||!m.path)return;
+  try{await root.child(m.path).delete();}catch(e){}
+  if(m.posterPath)try{await root.child(m.posterPath).delete();}catch(e){}
+  mediaAddUsage(-((m.size||0)+(m.posterSize||0)));}
+/* Bộ chọn đính kèm trong các form: hiện các tệp đã có (bỏ được), chọn
+   thêm nhiều tệp; bấm Lưu mới thật sự tải lên kho. */
+const _pickers={};
+function mediaPickerHTML(){return '<div class="media-picker"></div>';}
+function initMediaPicker(box,initial){
+  const st={items:(initial||[]).slice(),removed:[],pending:[]};
+  box._mpState=st;
+  const render=()=>{
+    box.innerHTML='<div class="mp-grid">'+
+      st.items.map((m,i)=>mediaThumbHTML(m,'<button type="button" class="mp-x" data-mprm="'+i+'" title="Bỏ tệp này">✕</button>')).join('')+
+      st.pending.map((f,i)=>'<div class="thumb-media mp-pending"><span>'+(f.type.startsWith('video/')?'🎬':'🖼')+'</span><button type="button" class="mp-x" data-mppd="'+i+'" title="Bỏ tệp này">✕</button></div>').join('')+
+      '</div>'+
+      '<label class="btn btn-sm mp-add">＋ Thêm ảnh / video<input type="file" accept="image/*,video/*" multiple hidden></label>'+
+      '<div class="mp-note">'+(mediaCapable()?'Mỗi video tối đa 100MB, ảnh tự nén cho nhẹ; tệp lưu lên kho riêng của cửa hàng.':'Chưa kết nối kho lưu trữ — tệp lưu tạm trong máy này (video tối đa 4MB).')+(mediaUsed()/MEDIA_QUOTA>=0.8?' ⚠️ Kho đã dùng '+Math.floor(mediaUsed()/MEDIA_QUOTA*100)+'% — sắp đầy, hãy liên hệ bên làm app để nâng cấp dung lượng.':'')+'</div>';
+    box.querySelectorAll('[data-mprm]').forEach(b=>b.onclick=()=>{st.removed.push(st.items[+b.dataset.mprm]);st.items.splice(+b.dataset.mprm,1);render();});
+    box.querySelectorAll('[data-mppd]').forEach(b=>b.onclick=()=>{st.pending.splice(+b.dataset.mppd,1);render();});
+    const inp=box.querySelector('input[type=file]');
+    inp.onchange=()=>{for(const f of inp.files){if(f.type.startsWith('video/')&&f.size>MEDIA_MAX_FILE){toast('Video "'+f.name+'" lớn hơn 100MB — bỏ qua.');continue;}st.pending.push(f);}render();};
+  };
+  render();
+  return st;}
+function inlineMedia(f){return new Promise((res,rej)=>{
+  const done=url=>res({id:uid(),kind:f.type.startsWith('video/')?'video':'image',name:f.name,size:f.size,path:null,url:url,posterPath:null,posterUrl:null,posterSize:0});
+  if(f.type.startsWith('image/')){compressImageBlob(f).then(b=>{const r=new FileReader();r.onload=()=>done(r.result);r.onerror=rej;r.readAsDataURL(b);}).catch(rej);}
+  else{if(f.size>4*1024*1024){rej(new Error('Video "'+f.name+'" quá 4MB — kho lưu trữ chưa sẵn sàng nên tạm thời chưa nhận video lớn.'));return;}
+    const r=new FileReader();r.onload=()=>done(r.result);r.onerror=rej;r.readAsDataURL(f);}});}
+async function collectMedia(box,btn){
+  const st=box&&box._mpState;if(!st)return[];
+  const out=st.items.slice();
+  if(st.pending.length){
+    if(btn){btn.disabled=true;btn.dataset.label=btn.textContent;}
+    let n=0;
+    try{
+      for(const f of st.pending){n++;
+        if(btn)btn.textContent='Đang tải tệp '+n+'/'+st.pending.length+'…';
+        if(mediaCapable()){
+          try{out.push(await uploadOneMedia(f));}
+          catch(e){ /* kho chưa được bật trên server (lỗi storage/*): lùi về
+             lưu trong máy như bản cũ thay vì báo lỗi chết form. */
+            if(e&&e.code&&String(e.code).indexOf('storage/')===0)out.push(await inlineMedia(f));
+            else throw e;}
+        }
+        else out.push(await inlineMedia(f));
+      }
+    }finally{if(btn){btn.disabled=false;if(btn.dataset.label)btn.textContent=btn.dataset.label;}}
+  }
+  for(const m of st.removed){if(m.path)deleteMediaFiles(m);}
+  return out;}
+function mediaThumbHTML(m,extra){
+  if(m.kind==='video'){
+    return '<span class="mp-thumb">'+(m.posterUrl?'<img class="thumb-media" data-full data-kind="video" data-fullsrc="'+m.url+'" src="'+m.posterUrl+'" alt="" title="Bấm để xem video">':'<span class="thumb-media mp-vtile" data-full data-kind="video" data-fullsrc="'+m.url+'" title="Bấm để xem video">▶</span>')+(extra||'')+'</span>';}
+  return '<span class="mp-thumb"><img class="thumb-media" data-full src="'+m.url+'" alt="" title="Bấm để xem ảnh lớn">'+(extra||'')+'</span>';}
+function mediaThumbsHTML(media){if(!media||!media.length)return '';
+  return '<div class="mp-grid" style="margin-top:6px">'+media.map(m=>mediaThumbHTML(m)).join('')+'</div>';}
 
 
 /* ---------- thẻ thống kê ---------- */
@@ -260,6 +377,7 @@ function renderProducts(){
     statCard('i-coins','blue','Giá trị hàng tồn (theo giá nhập)',fmtMoney(invValue))+
     statCard('i-box','teal','Số mặt hàng đang bán',DB.products.filter(p=>p.status!=='stopped').length)+
     statCard('i-alert','amber','Số sản phẩm có cảnh báo',DB.products.filter(p=>productAlerts(p).length>0).length);
+  renderSales();
   const q=normVN(document.getElementById('prodSearch').value||'');
   document.getElementById('prodGroupChips').innerHTML=
     '<button class="chip'+(prodGroupFilter==='__alerts'?' active':'')+'" data-group="__alerts">⚠ Có cảnh báo</button>'+
@@ -317,8 +435,20 @@ function productForm(p,prefillBarcode){
     field('Hạn dùng của lô này','<input id="pLotExpiry" type="date">')+'</div>')+
     '<div class="actions"><button type="submit" class="btn btn-primary">Lưu sản phẩm</button></div></form>');
   taxSel('pGroup','group');taxSel('pUnit','unit');
-  let imageData=p.image||'';
-  document.getElementById('pImage').addEventListener('change',e=>fileToDataURL(e.target,(d)=>{if(d){imageData=d;const pv=document.getElementById('pPreview');pv.src=d;pv.classList.remove('hidden');}}));
+  let imageData=p.image||'',pendingOldImgPath=null;
+  const pathFromUrl=u=>{try{const m=String(u).match(/\/o\/(.+?)\?/);return m?decodeURIComponent(m[1]):null;}catch(e){return null;}};
+  document.getElementById('pImage').addEventListener('change',async e=>{
+    const f=e.target.files&&e.target.files[0];if(!f)return;
+    const pv=document.getElementById('pPreview');
+    if(mediaCapable()){ /* v3.0.0: ảnh sản phẩm cũng lên kho file, khỏi phình dữ liệu đồng bộ */
+      toast('Đang tải ảnh lên…');
+      try{const m=await uploadProductImage(f);
+        if(imageData&&imageData!==m.url){const op=pathFromUrl(imageData);if(op)pendingOldImgPath=op;}
+        imageData=m.url;pv.src=m.url;pv.classList.remove('hidden');toast('Đã tải ảnh sản phẩm.');}
+      catch(err){ if(err&&err.code&&String(err.code).indexOf('storage/')===0){fileToDataURL(e.target,(d)=>{if(d){imageData=d;pv.src=d;pv.classList.remove('hidden');}});}
+        else toast('⚠️ '+(err.message||'Tải ảnh thất bại.')); }
+    }else fileToDataURL(e.target,(d)=>{if(d){imageData=d;pv.src=d;pv.classList.remove('hidden');}});
+  });
   document.getElementById('pScanBtn').onclick=()=>startScan(code=>fillBarcodeFromScan(code,p.id||null));
   const bcInp=document.getElementById('pBarcode');
   bcInp.addEventListener('change',()=>{const v=bcInp.value.trim();if(v.length>=8){checkBarcodeDup(v,p.id||null);lookupBarcodeName(v);}});
@@ -343,6 +473,7 @@ function productForm(p,prefillBarcode){
         if(lp>0)p.priceHistory.push({date:todayISO(),kind:'Giá nhập',price:lp});
         firstLot=true;}
       DB.products.push(p);}
+    if(pendingOldImgPath){const root=storageRoot();if(root)root.child(pendingOldImgPath).delete().catch(()=>{});}
     save();closeModal();renderAll();toast(firstLot?'Đã lưu sản phẩm + nhập lô đầu tiên.':'Đã lưu sản phẩm.');
     /* v2.5.3: lưu xong ĐÓNG LUÔN — trước đây tự mở tiếp trang chi tiết nên
        người dùng phải tắt thêm 1 lần nữa (Cruz phàn nàn 2026-11-10). */
@@ -410,7 +541,7 @@ function openProduct(id){
     (lots.length?lots.map(l=>{const du=l.expiry?daysUntil(l.expiry):null;
       return '<div class="sub-block"><div class="head"><b>Lô nhập '+fmtDate(l.date)+'</b><span class="money">'+fmtMoney(l.importPrice)+'/'+esc(p.unit||'')+'</span></div>'+
       '<div class="sub" style="color:var(--muted);font-size:13px">Số lượng: '+l.qty+' · Hạn dùng: '+(l.expiry?fmtDate(l.expiry)+(du!==null?' ('+(du<0?'đã hết hạn '+(-du)+' ngày':'còn '+du+' ngày')+')':''):'—')+'</div>'+
-      '<div class="actions"><button class="btn btn-small" data-lotdec="'+l.id+'">− Bớt số lượng (bán / huỷ)</button><button class="btn btn-small btn-danger" data-lotdel="'+l.id+'">Xoá lô</button></div></div>';}).join('')
+      '<div class="actions"><button class="btn btn-small btn-primary" data-sell="'+l.id+'">🛒 Bán</button><button class="btn btn-small" data-lotdec="'+l.id+'">− Bớt (huỷ / hao hụt)</button><button class="btn btn-small btn-danger" data-lotdel="'+l.id+'">Xoá lô</button></div></div>';}).join('')
       :'<div class="empty">Chưa có lô nhập nào.</div>')+
     '<div class="actions"><button class="btn btn-primary" id="btnLot">＋ Nhập thêm lô</button><button class="btn" id="btnEditP">✏️ Sửa</button><button class="btn" id="btnStatusP">'+(p.status==='stopped'?'▶ Kinh doanh lại':'⏸ Ngừng kinh doanh')+'</button></div>'+
     '<h3 class="sec-title">Lịch sử thay đổi giá</h3>'+
@@ -421,6 +552,7 @@ function openProduct(id){
   document.getElementById('btnLot').onclick=()=>lotForm(p);
   document.getElementById('btnDelP').onclick=()=>{if(confirm('Xoá hẳn sản phẩm “'+p.name+'”?')){armUndo();DB.products=DB.products.filter(x=>x.id!==p.id);save();closeModal();renderAll();toastUndo('Đã xoá sản phẩm.');}};
   modalBox.querySelectorAll('[data-lotdec]').forEach(b=>b.onclick=()=>{const l=p.lots.find(x=>x.id===b.dataset.lotdec);if(l)lotDecForm(p,l);});
+  modalBox.querySelectorAll('[data-sell]').forEach(b=>b.onclick=()=>{const l=p.lots.find(x=>x.id===b.dataset.sell);if(l)sellForm(p,l);});
   modalBox.querySelectorAll('[data-lotdel]').forEach(b=>b.onclick=()=>{if(confirm('Xoá lô này?')){armUndo();p.lots=p.lots.filter(x=>x.id!==b.dataset.lotdel);save();openProduct(id);renderAll();toastUndo('Đã xoá lô hàng.');}});
 }
 function lotForm(p){
@@ -450,6 +582,59 @@ function lotDecForm(p,l){
     if(!(n>0)){alert('Hãy nhập số lượng cần bớt lớn hơn 0.');return;}
     if(n>l.qty){alert('Lô này chỉ còn '+l.qty+' '+esc(p.unit||'')+' — không bớt quá số đang có được.');return;}
     l.qty-=n;save();renderAll();toast('Đã bớt '+n+' '+esc(p.unit||'')+' — lô còn '+l.qty+'.');openProduct(p.id);};
+}
+
+/* ---------- BÁN HÀNG + DOANH THU / LỢI NHUẬN (v3.0.0, khách yêu cầu) ----------
+   Bán theo từng LÔ: trừ kho của đúng lô đó và ghi vào DB.sales với giá
+   bán + giá nhập tại thời điểm bán để tính doanh thu / lãi gộp. Sổ Thu
+   chi KHÔNG tự thêm khoản nào (khách đã quen sổ hiện tại). Xoá một lượt
+   bán thì hàng được cộng lại vào lô. */
+function sellForm(p,l){
+  openModal('<h2>🛒 Bán hàng — '+esc(p.name)+'</h2><form id="fSell">'+
+    '<p class="sub" style="color:var(--muted);font-size:13.5px;margin:0 0 10px">Lô nhập '+fmtDate(l.date)+' · Giá nhập '+fmtMoney(l.importPrice)+'/'+esc(p.unit||'cái')+' · Lô đang còn <b>'+l.qty+' '+esc(p.unit||'')+'</b></p>'+
+    field('Số lượng bán *','<input id="sQty" type="number" min="0" step="any" required value="1">')+
+    field('Giá bán (mỗi '+esc(p.unit||'cái')+')','<input id="sPrice" class="mn" inputmode="numeric" value="'+(p.sellPrice?Number(p.sellPrice).toLocaleString('vi-VN'):'')+'">')+
+    '<p class="sub" id="sSum" style="font-size:14.5px;margin:2px 0 0"></p>'+
+    '<div class="actions"><button class="btn btn-primary" type="submit">Xác nhận bán</button></div></form>');
+  const q=document.getElementById('sQty'),pr=document.getElementById('sPrice'),sum=document.getElementById('sSum');
+  const upd=()=>{const n=Number(q.value)||0,price=num(pr.value),pf=n*(price-(Number(l.importPrice)||0));
+    sum.innerHTML='Thành tiền: <b>'+fmtMoney(n*price)+'</b> · '+(pf>=0?'Lãi':'Lỗ')+' dự kiến: <b class="'+(pf>=0?'money green':'money red')+'">'+fmtMoney(Math.abs(pf))+'</b>';};
+  q.oninput=upd;pr.addEventListener('input',upd);upd();
+  document.getElementById('fSell').onsubmit=e=>{e.preventDefault();
+    const n=Number(q.value)||0,price=num(pr.value);
+    if(!(n>0)){toast('Hãy nhập số lượng bán.');return;}
+    if(n>l.qty){toast('Lô này chỉ còn '+l.qty+' — không bán quá số đang có được.');return;}
+    l.qty-=n;
+    DB.sales.push({id:uid(),datetime:nowLocal(),productId:p.id,productName:p.name,lotId:l.id,qty:n,sellPrice:price,importPrice:Number(l.importPrice)||0,amount:n*price,profit:n*(price-(Number(l.importPrice)||0))});
+    save();renderAll();toast('Đã bán '+n+' '+esc(p.unit||'')+' — doanh thu '+fmtMoney(n*price)+'.');openProduct(p.id);};
+}
+function deleteSale(sid){
+  const s=DB.sales.find(x=>x.id===sid);if(!s)return;
+  if(!confirm('Xoá lượt bán "'+s.productName+' × '+s.qty+'"? Số lượng sẽ được cộng lại vào lô hàng.'))return;
+  const p=DB.products.find(x=>x.id===s.productId);
+  if(p){const l=(p.lots||[]).find(x=>x.id===s.lotId);if(l)l.qty=(Number(l.qty)||0)+(Number(s.qty)||0);}
+  DB.sales=DB.sales.filter(x=>x.id!==sid);
+  save();renderAll();toast('Đã xoá lượt bán — hàng đã cộng lại vào lô.');
+}
+function renderSales(){
+  const box=document.getElementById('salesBox');if(!box)return;
+  const now=new Date(),dayMs=86400000;
+  const t0=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime(),m0=new Date(now.getFullYear(),now.getMonth(),1).getTime();
+  const inR=(s,a,b)=>{const t=new Date(String(s.datetime).replace(' ','T')).getTime();return t>=a&&t<b;};
+  const sumK=(arr,k)=>arr.reduce((a,s)=>a+(Number(s[k])||0),0);
+  const dArr=DB.sales.filter(s=>inR(s,t0,t0+dayMs)),mArr=DB.sales.filter(s=>inR(s,m0,t0+dayMs));
+  const pf=(v)=>((v>=0?'Lãi ':'Lỗ ')+fmtMoney(Math.abs(v)));
+  const recent=DB.sales.slice().sort((a,b)=>String(b.datetime).localeCompare(String(a.datetime))).slice(0,8);
+  box.innerHTML='<div class="card sales-card"><h3>💰 Doanh thu & lợi nhuận</h3>'+
+    '<div class="sales-grid">'+
+    '<div><small>Doanh thu hôm nay</small><b>'+fmtMoney(sumK(dArr,'amount'))+'</b><span class="'+(sumK(dArr,'profit')>=0?'green':'red')+'">'+pf(sumK(dArr,'profit'))+'</span></div>'+
+    '<div><small>Doanh thu tháng này</small><b>'+fmtMoney(sumK(mArr,'amount'))+'</b><span class="'+(sumK(mArr,'profit')>=0?'green':'red')+'">'+pf(sumK(mArr,'profit'))+'</span></div>'+
+    '<div><small>Tổng số lượt bán</small><b>'+DB.sales.length+'</b><span class="'+(sumK(DB.sales,'profit')>=0?'green':'red')+'">Tổng '+pf(sumK(DB.sales,'profit')).toLowerCase()+'</span></div>'+
+    '</div>'+
+    (recent.length?'<div class="sales-recent">'+recent.map(s=>'<div class="sale-row"><div class="grow"><div class="title">'+esc(s.productName)+' × '+s.qty+'</div><div class="sub">'+fmtDT(s.datetime)+' · Giá bán '+fmtMoney(s.sellPrice)+' · Giá nhập '+fmtMoney(s.importPrice)+'</div></div><div class="sale-amt"><b>'+fmtMoney(s.amount)+'</b><span class="'+(s.profit>=0?'green':'red')+'">'+pf(s.profit)+'</span></div><button class="btn btn-small btn-danger" data-saledel="'+s.id+'">Xoá</button></div>').join('')+'</div>'
+    :'<p class="sub" style="color:var(--muted);font-size:13px;margin:8px 0 0">Chưa có lượt bán nào. Mở một sản phẩm, chọn đúng lô hàng rồi bấm nút 🛒 Bán.</p>')+
+    '</div>';
+  box.querySelectorAll('[data-saledel]').forEach(b=>b.onclick=()=>deleteSale(b.dataset.saledel));
 }
 
 /* ---------- quét barcode ----------
@@ -651,19 +836,20 @@ function customerForm(c){
       field('Tổng tiền nợ','<input id="cDebtTotal" class="mn" inputmode="numeric" placeholder="Để trống nếu khách chưa nợ">')+
       field('Nợ gì (ghi chú)','<input id="cDebtNote" placeholder="VD: 2 thùng bia + 1 bao gạo">')+
       field('Ngày giờ phát sinh','<input id="cDebtWhen" type="datetime-local" value="'+nowLocal()+'">')+
-      field('Ảnh / video bằng chứng','<input id="cDebtEv" type="file" accept="image/*,video/*">')
+      field('Ảnh / video bằng chứng (chọn được nhiều)',mediaPickerHTML())
     :'')+
     '<div class="actions"><button class="btn btn-primary" type="submit">Lưu</button></div></form>');
-  let evData='',evName='';
-  if(isNew){const evInp=document.getElementById('cDebtEv');if(evInp)evInp.addEventListener('change',e=>fileToDataURL(e.target,(d,n)=>{evData=d||'';evName=n||'';}));}
-  document.getElementById('fCust').onsubmit=e=>{e.preventDefault();
+  let cdPicker=null;
+  if(isNew){cdPicker=document.querySelector('#fCust .media-picker');initMediaPicker(cdPicker,[]);}
+  document.getElementById('fCust').onsubmit=async e=>{e.preventDefault();
     Object.assign(c,{name:document.getElementById('cName').value.trim(),villageId:document.getElementById('cVillage').value,
       phone:document.getElementById('cPhone').value.trim(),note:document.getElementById('cNote').value.trim()});
     let firstDebt=false;
     if(!c.id){c.id=uid();DB.customers.push(c);
       if(isNew){const tot=num(document.getElementById('cDebtTotal').value);
-        if(tot>0){DB.debts.push({id:uid(),customerId:c.id,datetime:document.getElementById('cDebtWhen').value||nowLocal(),
-          note:document.getElementById('cDebtNote').value.trim(),total:tot,evidence:evData,evidenceName:evName,payments:[]});firstDebt=true;}}}
+        if(tot>0){let media=[];try{media=await collectMedia(cdPicker,e.target.querySelector('[type=submit]'));}catch(err){toast('⚠️ '+(err.message||'Tải tệp lên thất bại.'));return;}
+          DB.debts.push({id:uid(),customerId:c.id,datetime:document.getElementById('cDebtWhen').value||nowLocal(),
+          note:document.getElementById('cDebtNote').value.trim(),total:tot,evidence:'',evidenceName:'',media:media,payments:[]});firstDebt=true;}}}
     save();closeModal();renderAll();
     if(firstDebt){toast('Đã lưu khách hàng + ghi khoản nợ đầu tiên.');openCustomer(c.id);}
     else toast('Đã lưu khách hàng.');};
@@ -684,6 +870,7 @@ function openCustomer(id){
       return '<div class="sub-block"><div class="head"><b>'+fmtDT(d.datetime)+'</b><span class="money '+(rem>0?'red':'')+'">'+(rem>0?'Còn '+fmtMoney(rem):'Đã trả hết ✓')+'</span></div>'+
       '<div>'+esc(d.note||'(không ghi chú)')+'</div><div class="sub" style="color:var(--muted);font-size:13px">Tổng nợ: '+fmtMoney(d.total)+' · Đã trả: '+fmtMoney(debtPaid(d))+'</div>'+
       (d.evidence?(String(d.evidence).startsWith('data:video')?'<video class="thumb-media" data-full src="'+d.evidence+'" preload="metadata" muted playsinline title="Bấm để xem lớn"></video>':'<img class="thumb-media" data-full src="'+d.evidence+'" alt="Ảnh chứng từ" title="Bấm để xem ảnh lớn">'):'')+
+      mediaThumbsHTML(d.media)+
       (d.payments&&d.payments.length?'<div style="margin-top:6px">'+payHistoryHtml(d)+'</div>':'')+
       '<div class="actions">'+(rem>0?'<button class="btn btn-small btn-primary" data-pay="'+d.id+'">Ghi trả nợ</button>':'')+
       '<button class="btn btn-small btn-danger" data-debtdel="'+d.id+'">Xoá khoản nợ</button></div></div>';}).join('')
@@ -712,14 +899,14 @@ function debtForm(c){
     field('Ngày giờ phát sinh','<input id="dWhen" type="datetime-local" value="'+nowLocal()+'">')+
     field('Nợ gì (ghi chú)','<input id="dNote" placeholder="VD: 2 thùng bia + 1 bao gạo">')+
     field('Tổng tiền nợ *','<input id="dTotal" class="mn" inputmode="numeric" required>')+
-    field('Ảnh / video bằng chứng','<input id="dEv" type="file" accept="image/*,video/*">')+
+    field('Ảnh / video bằng chứng (chọn được nhiều)',mediaPickerHTML())+
     '<div class="actions"><button class="btn btn-primary" type="submit">Lưu khoản nợ</button></div></form>');
-  let evData='',evName='';
-  document.getElementById('dEv').addEventListener('change',e=>fileToDataURL(e.target,(d,n)=>{evData=d||'';evName=n||'';}));
-  document.getElementById('fDebt').onsubmit=e=>{e.preventDefault();
+  const dPicker=document.querySelector('#fDebt .media-picker');initMediaPicker(dPicker,[]);
+  document.getElementById('fDebt').onsubmit=async e=>{e.preventDefault();
+    let media;try{media=await collectMedia(dPicker,e.target.querySelector('[type=submit]'));}catch(err){toast('⚠️ '+(err.message||'Tải tệp lên thất bại.'));return;}
     DB.debts.push({id:uid(),customerId:c.id,datetime:document.getElementById('dWhen').value,
       note:document.getElementById('dNote').value.trim(),total:num(document.getElementById('dTotal').value),
-      evidence:evData,evidenceName:evName,payments:[]});
+      evidence:'',evidenceName:'',media:media,payments:[]});
     save();renderAll();toast('Đã ghi khoản nợ.');openCustomer(c.id);};
 }
 /* Ghi 1 lần trả vào 1 khoản nợ + tự sinh đúng 1 khoản thu liên kết. */
@@ -824,6 +1011,7 @@ function openSupplier(id){
       return '<div class="sub-block"><div class="head"><b>Hoá đơn ngày '+fmtDate(i.date)+'</b><span class="money '+(rem>0?'red':'')+'">'+(rem>0?'Còn nợ '+fmtMoney(rem):'Đã trả hết ✓')+'</span></div>'+
       '<div class="sub" style="color:var(--muted);font-size:13px">Tổng: '+fmtMoney(i.total)+' · Đã thanh toán: '+fmtMoney(invPaid(i))+(i.note?' · '+esc(i.note):'')+'</div>'+
       (i.image?'<img class="thumb-media" data-full src="'+i.image+'" alt="Ảnh hoá đơn" title="Bấm để xem ảnh lớn">':'')+
+      mediaThumbsHTML(i.media)+
       (i.payments&&i.payments.length?'<div style="margin-top:6px">'+payHistoryHtml(i)+'</div>':'')+
       '<div class="actions">'+(rem>0?'<button class="btn btn-small btn-primary" data-invpay="'+i.id+'">Thanh toán</button>':'')+
       '<button class="btn btn-small btn-danger" data-invdel="'+i.id+'">Xoá hoá đơn</button></div></div>';}).join('')
@@ -839,15 +1027,15 @@ function openSupplier(id){
 function invoiceForm(s){
   openModal('<h2>Thêm hoá đơn — '+esc(s.name)+'</h2><form id="fInv">'+
     field('Ngày nhập','<input id="iDate" type="date" value="'+todayISO()+'">')+
-    field('Ảnh hoá đơn','<input id="iImg" type="file" accept="image/*">')+
+    field('Ảnh / video hoá đơn (chọn được nhiều)',mediaPickerHTML())+
     field('Tổng tiền hoá đơn *','<input id="iTotal" class="mn" inputmode="numeric" required>')+
     field('Ghi chú','<input id="iNote" placeholder="VD: 10 thùng nước ngọt, 5 bao gạo">')+
     '<div class="actions"><button class="btn btn-primary" type="submit">Lưu hoá đơn</button></div></form>');
-  let imgData='';
-  document.getElementById('iImg').addEventListener('change',e=>fileToDataURL(e.target,(d)=>{imgData=d||'';}));
-  document.getElementById('fInv').onsubmit=e=>{e.preventDefault();
+  const iPicker=document.querySelector('#fInv .media-picker');initMediaPicker(iPicker,[]);
+  document.getElementById('fInv').onsubmit=async e=>{e.preventDefault();
+    let media;try{media=await collectMedia(iPicker,e.target.querySelector('[type=submit]'));}catch(err){toast('⚠️ '+(err.message||'Tải tệp lên thất bại.'));return;}
     DB.invoices.push({id:uid(),supplierId:s.id,date:document.getElementById('iDate').value,
-      total:num(document.getElementById('iTotal').value),image:imgData,
+      total:num(document.getElementById('iTotal').value),image:'',media:media,
       note:document.getElementById('iNote').value.trim(),payments:[]});
     save();renderAll();toast('Đã lưu hoá đơn.');openSupplier(s.id);};
 }
@@ -913,7 +1101,7 @@ function renderCash(){
   if(csEl){const fThu=list.filter(c=>c.kind==='thu').reduce((s,c)=>s+(Number(c.amount)||0),0),fChi=list.filter(c=>c.kind==='chi').reduce((s,c)=>s+(Number(c.amount)||0),0),fNet=fThu-fChi;
     csEl.innerHTML=list.length?('Khoảng đang xem: <b>'+list.length+' giao dịch</b> · Thu <b class="money green">'+fmtMoney(fThu)+'</b> · Chi <b class="money red">'+fmtMoney(fChi)+'</b> · '+(fNet>=0?'Lãi <b class="money green">':'Lỗ <b class="money red">')+fmtMoney(Math.abs(fNet))+'</b>'):'';}
   document.getElementById('cashList').innerHTML=list.length?list.map(c=>
-    '<div class="row no-click"><span class="dot-ico '+(c.kind==='thu'?'':'chi')+'" style="width:40px;height:40px;border-radius:11px">'+ic(c.kind==='thu'?'i-in':'i-out')+'</span>'+(c.evidence&&String(c.evidence).startsWith('data:image')?'<img class="thumb" data-full src="'+c.evidence+'" style="width:44px;height:44px" alt="Ảnh chứng từ" title="Bấm để xem ảnh lớn">':'')+'<div class="grow"><div class="title">'+esc(c.type)+'</div>'+
+    '<div class="row no-click"><span class="dot-ico '+(c.kind==='thu'?'':'chi')+'" style="width:40px;height:40px;border-radius:11px">'+ic(c.kind==='thu'?'i-in':'i-out')+'</span>'+(c.media&&c.media.length?mediaThumbHTML(c.media[0]):(c.evidence&&String(c.evidence).startsWith('data:image')?'<img class="thumb" data-full src="'+c.evidence+'" style="width:44px;height:44px" alt="Ảnh chứng từ" title="Bấm để xem ảnh lớn">':''))+'<div class="grow"><div class="title">'+esc(c.type)+'</div>'+
     '<div class="sub">'+fmtDT(c.datetime)+(c.content?' · '+esc(c.content):'')+(c.person?' · '+esc(c.person):'')+'</div>'+
     (c.source!=='manual'?'<span class="badge">Tự động từ '+(c.source==='debtPayment'?'công nợ khách':'thanh toán NCC')+' — không sửa tại đây</span>':'')+
     (c.note?'<div class="sub">'+esc(c.note)+'</div>':'')+'</div>'+
@@ -941,7 +1129,7 @@ document.getElementById('btnAddCash').onclick=()=>{
     field('Số tiền *','<input id="cashAmt" class="mn" inputmode="numeric" required>')+
     field('Nội dung','<input id="cashContent" placeholder="VD: Tiền điện tháng 11">')+
     field('Người thực hiện','<input id="cashPerson">')+
-    field('Ảnh chứng từ','<input id="cashEv" type="file" accept="image/*">')+
+    field('Ảnh / video chứng từ (chọn được nhiều)',mediaPickerHTML())+
     field('Ghi chú','<textarea id="cashNote" rows="2"></textarea>')+
     '<p style="color:var(--muted);font-size:13px">Lưu ý: tiền khách trả nợ và tiền trả nhà cung cấp được app tự ghi từ mục Công nợ / Nhà cung cấp — không cần nhập tay ở đây để tránh trùng.</p>'+
     '<div class="actions"><button class="btn btn-primary" type="submit">Lưu giao dịch</button></div></form>');
@@ -949,12 +1137,12 @@ document.getElementById('btnAddCash').onclick=()=>{
   const fillTypes=()=>{const arr=kindSel.value==='thu'?THU_TYPES:CHI_TYPES;
     typeSel.innerHTML=arr.filter(x=>x!=='Khách trả nợ'&&x!=='Thanh toán nhà cung cấp').map(x=>'<option>'+x+'</option>').join('');};
   kindSel.onchange=fillTypes;fillTypes();
-  let evData='';
-  document.getElementById('cashEv').addEventListener('change',e=>fileToDataURL(e.target,(d)=>{evData=d||'';}));
-  document.getElementById('fCash').onsubmit=e=>{e.preventDefault();
+  const kPicker=document.querySelector('#fCash .media-picker');initMediaPicker(kPicker,[]);
+  document.getElementById('fCash').onsubmit=async e=>{e.preventDefault();
+    let media;try{media=await collectMedia(kPicker,e.target.querySelector('[type=submit]'));}catch(err){toast('⚠️ '+(err.message||'Tải tệp lên thất bại.'));return;}
     DB.cash.push({id:uid(),datetime:document.getElementById('cashWhen').value,kind:kindSel.value,type:typeSel.value,
       amount:num(document.getElementById('cashAmt').value),content:document.getElementById('cashContent').value.trim(),
-      person:document.getElementById('cashPerson').value.trim(),evidence:evData,
+      person:document.getElementById('cashPerson').value.trim(),evidence:'',media:media,
       note:document.getElementById('cashNote').value.trim(),source:'manual',sourceRef:''});
     save();closeModal();renderAll();toast('Đã lưu giao dịch.');};
 };
@@ -1173,6 +1361,11 @@ function buildSheets(){
     headers:['STT','Nhà cung cấp','Hoá đơn ngày','Ngày thanh toán','Số tiền (đ)','Phương thức','Người thực hiện','Còn lại sau trả (đ)'],
     widths:[6,26,14,15,15,15,16,18],moneyCols:[4,7],rows:supPayRows,
     footer:[[{v:'TỔNG ĐÃ THANH TOÁN',s:5},'','',{v:supPayRows.reduce((s,r)=>s+(Number(r[4])||0),0),s:6},'','','']]});
+  const saleRows=DB.sales.slice().sort((a,b)=>String(a.datetime).localeCompare(String(b.datetime))).map((s,i)=>[i+1,fmtDT(s.datetime),s.productName,Number(s.qty)||0,Number(s.importPrice)||0,Number(s.sellPrice)||0,Number(s.amount)||0,Number(s.profit)||0]);
+  sheets.push({name:'Bán hàng',title:'DOANH THU BÁN HÀNG',subtitle,
+    headers:['STT','Ngày giờ','Sản phẩm','Số lượng','Giá nhập (đ)','Giá bán (đ)','Doanh thu (đ)','Lãi gộp (đ)'],
+    widths:[6,17,30,10,14,14,16,16],moneyCols:[4,5,6,7],rows:saleRows,
+    footer:[[{v:'TỔNG CỘNG',s:5},'','','','', '',{v:DB.sales.reduce((s,x)=>s+(Number(x.amount)||0),0),s:6},{v:DB.sales.reduce((s,x)=>s+(Number(x.profit)||0),0),s:6}]]});
   const srcName=c=>c.source==='debtPayment'?'Tự động (khách trả nợ)':c.source==='supplierPayment'?'Tự động (trả NCC)':'Nhập tay';
   sheets.push({name:'Thu chi',title:'SỔ THU CHI',subtitle,
     headers:['STT','Ngày giờ','Loại','Phân loại','Số tiền (đ)','Nội dung','Người thực hiện','Ghi chú','Nguồn'],
@@ -1366,6 +1559,7 @@ async function initSync(){
     await withTimeout(loadScript(base+'firebase-app-compat.js'),20000);
     await withTimeout(loadScript(base+'firebase-auth-compat.js'),20000);
     await withTimeout(loadScript(base+'firebase-firestore-compat.js'),20000);
+    await withTimeout(loadScript(base+'firebase-storage-compat.js'),20000);
     firebase.initializeApp(FB_CONFIG);
     try{await withTimeout(firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL),6000);}catch(e){}
     _fbReady=true;
@@ -1509,6 +1703,11 @@ function accountModal(){
     openModal('<h2>☁️ Tài khoản & đồng bộ</h2>'
     +'<p>Đang đăng nhập: <strong>'+esc(_sync.email)+'</strong> — '+(_sync.isOwner?'Chủ cửa hàng':'Người quản lý')+'</p>'
     +'<p class="acc-note">'+(_sync.lastSyncAt?('Lần đồng bộ gần nhất: '+fmtTime(_sync.lastSyncAt)+'. '):'Chưa đồng bộ lần nào. ')+'Mọi thay đổi sẽ tự động lên server sau khoảng 2 giây. Nếu hai máy cùng sửa một lúc, bản lưu sau cùng sẽ thắng.</p>'
+    +(()=>{const u=mediaUsed(),pc=Math.min(100,Math.round(u/MEDIA_QUOTA*100));
+      const fmtB=n=>n>=1073741824?(n/1073741824).toFixed(2).replace('.',',')+' GB':n>=1048576?Math.round(n/1048576)+' MB':Math.max(1,Math.round(n/1024))+' KB';
+      return '<h3 style="margin:16px 0 6px">Kho ảnh / video đính kèm</h3>'
+      +'<div class="usage-bar"><span style="width:'+pc+'%"></span></div>'
+      +'<p class="acc-note">Đã dùng '+fmtB(u)+' / 5 GB ('+pc+'%). Ảnh và video bằng chứng lưu ở kho riêng này, xem được trên mọi máy đăng nhập.'+(pc>=80?' <strong>Kho sắp đầy — hãy liên hệ bên làm app để nâng cấp dung lượng.</strong>':'')+'</p>';})()
     +'<h3 style="margin:16px 0 6px">Người quản lý cửa hàng</h3>'
     +'<div>'+members+'</div>'
     +(_sync.isOwner
@@ -1541,5 +1740,128 @@ function accountModal(){
     document.getElementById('accOut').onclick=async()=>{await firebase.auth().signOut();closeModal();toast('Đã đăng xuất. Dữ liệu trên máy vẫn giữ nguyên.');};
   }
 }
+/* ---------- TRA CỨU NHANH (v3.0.0, khách yêu cầu) ----------
+   1) Tìm bằng GIỌNG NÓI: nút 🎤 cạnh ô tìm kiếm (Chrome/Android hỗ trợ
+      tốt; máy nào không có thì nút tự ẩn).
+   2) HỎI ĐÁP: nút 💬 mở hộp hỏi — trả lời ngay từ dữ liệu cửa hàng
+      (nợ của từng khách, doanh thu, lãi, thu chi, hàng sắp hết/hết hạn…),
+      chạy hoàn toàn trong máy, không gửi dữ liệu đi đâu. */
+function attachVoice(inputId){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  const inp=document.getElementById(inputId);
+  if(!SR||!inp)return;
+  const b=document.createElement('button');
+  b.type='button';b.className='voice-btn';b.textContent='🎤';b.title='Tìm bằng giọng nói';
+  inp.insertAdjacentElement('afterend',b);
+  b.onclick=()=>{try{
+    const r=new SR();r.lang='vi-VN';r.interimResults=false;
+    b.classList.add('listening');b.textContent='🔴';
+    r.onresult=e=>{const t=(e.results[0]&&e.results[0][0]&&e.results[0][0].transcript)||'';if(t){inp.value=t;inp.dispatchEvent(new Event('input',{bubbles:true}));}};
+    r.onend=()=>{b.classList.remove('listening');b.textContent='🎤';};
+    r.onerror=()=>{b.classList.remove('listening');b.textContent='🎤';toast('Chưa nghe rõ — thử lại hoặc gõ tay.');};
+    r.start();
+  }catch(e){toast('Máy này không hỗ trợ tìm bằng giọng nói.');}};
+}
+['prodSearch','custSearch','supSearch'].forEach(attachVoice);
+
+const CHAT_SAMPLES=['Ai đang nợ nhiều nhất?','Khách còn nợ tổng cộng bao nhiêu?','Hôm nay bán được bao nhiêu?','Tháng này lãi bao nhiêu?','Hôm nay thu chi thế nào?','Sản phẩm nào sắp hết hạn?','Hàng nào sắp hết?','Còn nợ nhà cung cấp bao nhiêu?'];
+let _chatLog=[];
+function salesSum(fromMs,toMs,k){return DB.sales.filter(s=>{const t=new Date(String(s.datetime).replace(' ','T')).getTime();return t>=fromMs&&t<toMs;}).reduce((a,s)=>a+(Number(s[k])||0),0);}
+function periodOf(s){
+  const now=new Date(),d0=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime(),D=86400000;
+  if(s.includes('hom qua'))return{label:'hôm qua',from:d0-D,to:d0};
+  if(s.includes('thang truoc')){const f=new Date(now.getFullYear(),now.getMonth()-1,1).getTime();return{label:'tháng trước',from:f,to:new Date(now.getFullYear(),now.getMonth(),1).getTime()};}
+  if(s.includes('thang nay')||s.includes('thang'))return{label:'tháng này',from:new Date(now.getFullYear(),now.getMonth(),1).getTime(),to:d0+D};
+  if(s.includes('tuan'))return{label:'7 ngày gần đây',from:d0-6*D,to:d0+D};
+  return{label:'hôm nay',from:d0,to:d0+D};}
+function answerQuery(raw){
+  const s=normVN(raw);
+  const li=(t)=>'<div>• '+t+'</div>';
+  if(/(xin chao|hello|chao ban|lam duoc gi|hoi gi)/.test(s))return 'Tôi tra cứu được ngay trong dữ liệu cửa hàng: <b>nợ của từng khách</b>, <b>ai nợ nhiều nhất</b>, <b>doanh thu / lợi nhuận</b> theo hôm nay / tháng này, <b>thu chi</b>, <b>hàng sắp hết / sắp hết hạn</b>, <b>tồn kho của một món hàng</b> và <b>nợ nhà cung cấp</b>. Bạn thử bấm một câu mẫu bên dưới nhé.';
+  /* nợ nhà cung cấp */
+  if(s.includes('nha cung cap')||s.includes('ncc')){
+    const tot=DB.invoices.reduce((a,i)=>a+invRemain(i),0);
+    if(tot<=0)return 'Hiện cửa hàng <b>không còn nợ nhà cung cấp</b> nào.';
+    const rows=DB.suppliers.map(x=>({x:x,rem:DB.invoices.filter(i=>i.supplierId===x.id).reduce((a,i)=>a+invRemain(i),0)})).filter(r=>r.rem>0).sort((a,b)=>b.rem-a.rem);
+    return 'Cửa hàng còn nợ nhà cung cấp tổng cộng <b>'+fmtMoney(tot)+'</b>:'+rows.map(r=>li(esc(r.x.name)+': '+fmtMoney(r.rem))).join('');
+  }
+  /* ai nợ nhiều nhất */
+  if(/no nhieu nhat|ai.*no nhieu|no nhieu/.test(s)){
+    const rows=DB.customers.map(c=>({c:c,rem:customerDebtTotal(c.id)})).filter(r=>r.rem>0).sort((a,b)=>b.rem-a.rem).slice(0,5);
+    if(!rows.length)return 'Hiện <b>không có khách nào đang nợ</b>.';
+    return 'Các khách đang nợ nhiều nhất:'+rows.map(r=>li('<b>'+esc(r.c.name)+'</b> ('+esc((village(r.c.villageId)||{}).name||'')+'): '+fmtMoney(r.rem))).join('');
+  }
+  /* nợ theo tên khách — kiểm tra TRƯỚC các ý chung để tên riêng thắng */
+  const cust=DB.customers.map(c=>({c:c,n: normVN(c.name)})).filter(x=>x.n.length>=3&&s.includes(x.n)).sort((a,b)=>b.n.length-a.n.length)[0];
+  if(cust){
+    const rem=customerDebtTotal(cust.c.id);
+    const ds=DB.debts.filter(d=>d.customerId===cust.c.id&&debtRemain(d)>0).sort((a,b)=>String(a.datetime).localeCompare(String(b.datetime)));
+    if(rem<=0)return 'Khách <b>'+esc(cust.c.name)+'</b> hiện <b>không còn nợ</b>.';
+    return 'Khách <b>'+esc(cust.c.name)+'</b> còn nợ <b>'+fmtMoney(rem)+'</b>:'+ds.map(d=>li(fmtDT(d.datetime)+' — '+esc(d.note||'ghi nợ')+': còn '+fmtMoney(debtRemain(d)))).join('');
+  }
+  /* doanh thu */
+  if(/doanh thu|ban duoc|ban hang|ban ra/.test(s)){
+    const p=periodOf(s);
+    if(p.label==='hôm nay'){const m=periodOf('thang nay');
+      return 'Doanh thu <b>hôm nay</b>: '+fmtMoney(salesSum(p.from,p.to,'amount'))+' (lãi gộp '+fmtMoney(salesSum(p.from,p.to,'profit'))+').<br>Doanh thu <b>tháng này</b>: '+fmtMoney(salesSum(m.from,m.to,'amount'))+' (lãi gộp '+fmtMoney(salesSum(m.from,m.to,'profit'))+').';}
+    return 'Doanh thu <b>'+p.label+'</b>: '+fmtMoney(salesSum(p.from,p.to,'amount'))+' — lãi gộp '+fmtMoney(salesSum(p.from,p.to,'profit'))+'.';
+  }
+  /* lợi nhuận */
+  if(s.includes('loi nhuan')||/(^|\s)(lai|lo)(\s|$)/.test(s+' ')||s.includes('lai bao nhieu')||s.includes('lo bao nhieu')){
+    const p=periodOf(s);
+    if(p.label==='hôm nay'){const m=periodOf('thang nay');
+      return 'Lãi gộp <b>hôm nay</b>: '+fmtMoney(salesSum(p.from,p.to,'profit'))+'.<br>Lãi gộp <b>tháng này</b>: '+fmtMoney(salesSum(m.from,m.to,'profit'))+'.';}
+    return 'Lãi gộp <b>'+p.label+'</b>: '+fmtMoney(salesSum(p.from,p.to,'profit'))+' (doanh thu '+fmtMoney(salesSum(p.from,p.to,'amount'))+').';
+  }
+  /* thu chi */
+  if(/thu chi|thu bao nhieu|chi bao nhieu|tien ra|tien vao/.test(s)){
+    const p=periodOf(s);
+    const inR=c=>{const t=new Date(String(c.datetime).replace(' ','T')).getTime();return t>=p.from&&t<p.to;};
+    const thu=DB.cash.filter(c=>c.kind==='thu'&&inR(c)).reduce((a,c)=>a+(Number(c.amount)||0),0);
+    const chi=DB.cash.filter(c=>c.kind==='chi'&&inR(c)).reduce((a,c)=>a+(Number(c.amount)||0),0);
+    return 'Thu chi <b>'+p.label+'</b>:<br>• Tổng thu: <b>'+fmtMoney(thu)+'</b><br>• Tổng chi: <b>'+fmtMoney(chi)+'</b><br>• '+(thu-chi>=0?'Lãi':'Lỗ')+' <b>'+fmtMoney(Math.abs(thu-chi))+'</b> (theo sổ Thu chi).';
+  }
+  /* hết hạn */
+  if(/het han/.test(s)){
+    const a=allAlerts();
+    if(!a.expired.length&&!a.expiring.length)return 'Hiện <b>không có sản phẩm nào hết hạn hay sắp hết hạn</b>.';
+    return (a.expired.length?'<b>Đã hết hạn:</b>'+a.expired.map(x=>li(esc(x.p.name)+' — '+esc(x.al.label))).join(''):'')+(a.expiring.length?'<b>Sắp hết hạn:</b>'+a.expiring.map(x=>li(esc(x.p.name)+' — '+esc(x.al.label))).join(''):'');
+  }
+  /* sắp hết hàng */
+  if(/sap het|het hang|ton kho|con it/.test(s)){
+    const a=allAlerts();
+    if(!a.out.length&&!a.low.length)return 'Hiện <b>không có sản phẩm nào hết hay sắp hết hàng</b>.';
+    return (a.out.length?'<b>Đã hết hàng:</b>'+a.out.map(x=>li(esc(x.p.name))).join(''):'')+(a.low.length?'<b>Sắp hết (dưới ngưỡng tồn):</b>'+a.low.map(x=>li(esc(x.p.name)+' — còn '+stockOf(x.p)+' '+esc(x.p.unit||''))).join(''):'');
+  }
+  /* tổng nợ khách */
+  if(/tong.*no|khach.*no|no.*khach/.test(s)){
+    const tot=DB.debts.reduce((a,d)=>a+debtRemain(d),0);
+    const n=DB.customers.filter(c=>customerDebtTotal(c.id)>0).length;
+    return 'Khách hàng còn nợ cửa hàng tổng cộng <b>'+fmtMoney(tot)+'</b> (gồm '+n+' khách đang có nợ).';
+  }
+  /* tồn kho theo tên sản phẩm */
+  const prod=DB.products.map(p=>({p:p,n: normVN(p.name)})).filter(x=>x.n.length>=3&&s.includes(x.n)).sort((a,b)=>b.n.length-a.n.length)[0];
+  if(prod){
+    const p=prod.p,stock=stockOf(p);
+    const lots=(p.lots||[]).filter(l=>(Number(l.qty)||0)>0).map(l=>li('Lô '+fmtDate(l.date)+': còn '+l.qty+' '+esc(p.unit||'')+' · giá nhập '+fmtMoney(l.importPrice)+(l.expiry?' · hạn '+fmtDate(l.expiry):''))).join('');
+    return '<b>'+esc(p.name)+'</b> còn tồn <b>'+stock+' '+esc(p.unit||'')+'</b>, giá bán '+fmtMoney(p.sellPrice||0)+'.'+(lots?'<br>'+lots:'');
+  }
+  return 'Tôi chưa hiểu rõ câu này. Bạn thử hỏi kiểu: "khách [tên] còn nợ bao nhiêu", "[tên hàng] còn bao nhiêu", "hôm nay bán được bao nhiêu", "tháng này lãi bao nhiêu", "ai nợ nhiều nhất", "hàng nào sắp hết hạn"…';
+}
+function openChat(){
+  openModal('<h2>💬 Hỏi nhanh dữ liệu cửa hàng</h2>'+
+    '<div class="chat-log" id="chatLog"></div>'+
+    '<div class="chat-samples">'+CHAT_SAMPLES.map(q=>'<button type="button" class="chip" data-cq="'+esc(q)+'">'+esc(q)+'</button>').join('')+'</div>'+
+    '<form id="fChat" class="chat-form"><input id="chatInp" class="input grow" placeholder="Gõ câu hỏi của bạn…" autocomplete="off"><button class="btn btn-primary" type="submit">Hỏi</button></form>'+
+    '<p class="acc-note">Tra cứu ngay trong dữ liệu cửa hàng trên máy này — không gửi dữ liệu ra ngoài.</p>');
+  const log=document.getElementById('chatLog');
+  const renderLog=()=>{log.innerHTML=_chatLog.length?_chatLog.map(m=>'<div class="chat-msg '+m.who+'">'+m.html+'</div>').join(''):'<div class="chat-msg bot">Xin chào! Bạn muốn tra cứu gì trong cửa hàng? Bấm một câu mẫu bên dưới hoặc gõ câu hỏi.</div>';log.scrollTop=log.scrollHeight;};
+  const ask=q=>{_chatLog.push({who:'me',html:esc(q)});_chatLog.push({who:'bot',html:answerQuery(q)});renderLog();};
+  renderLog();
+  document.querySelectorAll('[data-cq]').forEach(b=>b.onclick=()=>ask(b.dataset.cq));
+  document.getElementById('fChat').onsubmit=e=>{e.preventDefault();const inp=document.getElementById('chatInp');const v=inp.value.trim();if(v){inp.value='';ask(v);}};
+}
+const _fab=document.getElementById('chatFab');if(_fab)_fab.onclick=openChat;
+
 document.querySelectorAll('.js-account').forEach(b=>b.addEventListener('click',accountModal));
 initSync();
