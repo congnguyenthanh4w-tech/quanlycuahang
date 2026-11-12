@@ -63,8 +63,8 @@ const debtPaid=d=>(d.payments||[]).reduce((s,p)=>s+(Number(p.amount)||0),0);
 const debtRemain=d=>(Number(d.total)||0)-debtPaid(d);
 const invPaid=i=>(i.payments||[]).reduce((s,p)=>s+(Number(p.amount)||0),0);
 const invRemain=i=>(Number(i.total)||0)-invPaid(i);
-function payHistoryHtml(owner){let run=0;return (owner.payments||[]).map(p=>{run+=Number(p.amount)||0;const rem=(Number(owner.total)||0)-run;
-  return '<div class="kv"><span>\u21A9 '+fmtDate(p.date)+' \u00B7 '+esc(p.method||'')+(p.person?' \u00B7 '+esc(p.person):'')+'</span><span style="text-align:right"><b>'+fmtMoney(p.amount)+'</b><br><span style="color:var(--muted);font-size:12.5px">Còn lại '+fmtMoney(rem)+'</span></span></div>';}).join('');}
+function payHistoryHtml(owner,editInv){let run=0;return (owner.payments||[]).map(p=>{run+=Number(p.amount)||0;const rem=(Number(owner.total)||0)-run;
+  return '<div class="kv"><span>\u21A9 '+fmtDate(p.date)+' \u00B7 '+esc(p.method||'')+(p.person?' \u00B7 '+esc(p.person):'')+'</span><span style="text-align:right"><b>'+fmtMoney(p.amount)+'</b><br><span style="color:var(--muted);font-size:12.5px">Còn lại '+fmtMoney(rem)+'</span>'+(editInv?'<br><button type="button" class="btn btn-small" data-payedit="'+p.id+'" data-invid="'+owner.id+'">✏️ Sửa</button>':'')+'</span></div>';}).join('');}
 const customer=id=>DB.customers.find(c=>c.id===id);
 const supplier=id=>DB.suppliers.find(s=>s.id===id);
 const village=id=>DB.villages.find(v=>v.id===id);
@@ -547,6 +547,7 @@ document.getElementById('productList').addEventListener('click',e=>{
 
 function productForm(p,prefillBarcode){
   p=p||{name:'',code:'',barcode:prefillBarcode||'',group:groups()[0],unit:'Gói',sellPrice:'',threshold:5,warnDays:30,status:'active',image:'',images:[],lots:[],priceHistory:[]};
+  const lastImp=p.id?(p.lots||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))[0]:null;
   openModal('<h2>'+(p.id?'Sửa sản phẩm':'Thêm sản phẩm')+'</h2><form id="fProd">'+
     field('Ảnh sản phẩm (chọn được nhiều ảnh)',mediaPickerHTML())+
     field('Tên sản phẩm *','<input id="pName" required value="'+esc(p.name)+'">')+
@@ -556,6 +557,7 @@ function productForm(p,prefillBarcode){
     field('Đơn vị','<select id="pUnit">'+units().map(u=>'<option'+((p.unit||'Gói')===u?' selected':'')+'>'+esc(u)+'</option>').join('')+'<option value="__add">＋ Thêm đơn vị mới…</option></select>')+'</div>'+
     '<div class="grid2">'+field('Giá bán tham khảo','<input id="pSell" class="mn" inputmode="numeric" value="'+esc(p.sellPrice)+'">')+
     field('Trạng thái','<select id="pStatus"><option value="active"'+(p.status==='active'?' selected':'')+'>Đang kinh doanh</option><option value="stopped"'+(p.status==='stopped'?' selected':'')+'>Ngừng kinh doanh</option></select>')+'</div>'+
+    (lastImp?field('Giá nhập — của lô gần nhất ('+fmtDate(lastImp.date)+')','<input id="pImp" class="mn" inputmode="numeric" value="'+esc(lastImp.importPrice||'')+'">')+'<p class="sub" style="color:var(--muted);font-size:12.5px;margin:-6px 0 10px">Mỗi lô có một giá nhập riêng. Ô này sửa giá của lô gần nhất; muốn sửa lô khác, mở sản phẩm rồi bấm ✏️ Sửa lô ở lô đó.</p>':'')+
     '<div class="grid2">'+field('Ngưỡng cảnh báo tồn kho','<input id="pThreshold" type="number" min="0" value="'+esc(p.threshold)+'">')+
     field('Số ngày cảnh báo hết hạn','<input id="pWarn" type="number" min="0" value="'+esc(p.warnDays)+'">')+'</div>'+
     (p.id?'':'<h3 class="sec-title">Lô nhập đầu tiên — không bắt buộc</h3>'+
@@ -578,6 +580,10 @@ function productForm(p,prefillBarcode){
     let media;try{media=await collectMedia(pPicker,e.target.querySelector('[type=submit]'));}catch(err){toast('⚠️ '+(err.message||'Tải ảnh lên thất bại.'));return;}
     const sell=num(document.getElementById('pSell').value);
     if(p.id&&Number(p.sellPrice)!==sell)p.priceHistory.push({date:todayISO(),kind:'Giá bán',price:sell});
+    if(lastImp){const np=num(document.getElementById('pImp').value);
+      if(np>0&&np!==(Number(lastImp.importPrice)||0)){lastImp.importPrice=np;
+        const lh=p.priceHistory[p.priceHistory.length-1];
+        if(!lh||lh.kind!=='Giá nhập'||lh.price!==np)p.priceHistory.push({date:todayISO(),kind:'Giá nhập',price:np});}}
     Object.assign(p,{name:document.getElementById('pName').value.trim(),
       code:document.getElementById('pCode').value.trim()||p.code||('HH'+String(DB.products.length+1).padStart(3,'0')),
       barcode:document.getElementById('pBarcode').value.trim(),group:document.getElementById('pGroup').value,
@@ -671,7 +677,7 @@ function openProduct(id){
         :'<span class="badge">Hạn '+fmtDate(l.expiry)+' · còn '+du+' ngày</span>'));
       return '<div class="sub-block lot-card"><div class="head"><b>Lô nhập '+fmtDate(l.date)+'</b><span class="money">'+fmtMoney(l.importPrice)+'/'+esc(p.unit||'')+'</span></div>'+
       '<div class="lot-meta"><span class="lot-qty">Còn <b>'+fmtQty(l.qty)+'</b> '+esc(p.unit||'')+'</span>'+expBadge+'</div>'+
-      '<div class="lot-actions"><button class="btn btn-small btn-primary" data-sell="'+l.id+'">🛒 Bán từ lô này</button><button class="btn btn-small" data-lotdec="'+l.id+'">− Bớt (huỷ / hao hụt)</button><button class="btn btn-small btn-danger" data-lotdel="'+l.id+'">Xoá lô</button></div></div>';}).join('')
+      '<div class="lot-actions"><button class="btn btn-small btn-primary" data-sell="'+l.id+'">🛒 Bán từ lô này</button><button class="btn btn-small" data-lotedit="'+l.id+'">✏️ Sửa lô</button><button class="btn btn-small" data-lotdec="'+l.id+'">− Bớt (huỷ / hao hụt)</button><button class="btn btn-small btn-danger" data-lotdel="'+l.id+'">Xoá lô</button></div></div>';}).join('')
       :'<div class="empty">Chưa có lô nhập nào.</div>')+
     '<div class="p-actions">'+(st>0?'<button class="btn btn-primary" id="btnSellP">🛒 Bán hàng</button>':'')+'<button class="btn btn-primary" id="btnLot">＋ Nhập thêm lô</button><button class="btn" id="btnEditP">✏️ Sửa thông tin</button><button class="btn" id="btnStatusP">'+(p.status==='stopped'?'▶ Kinh doanh lại':'⏸ Ngừng kinh doanh')+'</button></div>'+
     '<h3 class="sec-title">Lịch sử thay đổi giá</h3>'+
@@ -682,6 +688,7 @@ function openProduct(id){
   document.getElementById('btnStatusP').onclick=()=>{p.status=(p.status==='stopped')?'active':'stopped';save();renderAll();openProduct(id);toast(p.status==='stopped'?'Đã ngừng kinh doanh sản phẩm.':'Đã mở kinh doanh lại.');};
   document.getElementById('btnLot').onclick=()=>lotForm(p);
   document.getElementById('btnDelP').onclick=()=>{if(confirm('Xoá hẳn sản phẩm “'+p.name+'”?')){armUndo();productImages(p).forEach(m=>{if(m&&m.path)deleteMediaFiles(m);});DB.products=DB.products.filter(x=>x.id!==p.id);save();closeModal();renderAll();toastUndo('Đã xoá sản phẩm.');}};
+  modalBox.querySelectorAll('[data-lotedit]').forEach(b=>b.onclick=()=>{const l=p.lots.find(x=>x.id===b.dataset.lotedit);if(l)lotEditForm(p,l);});
   modalBox.querySelectorAll('[data-lotdec]').forEach(b=>b.onclick=()=>{const l=p.lots.find(x=>x.id===b.dataset.lotdec);if(l)lotDecForm(p,l);});
   modalBox.querySelectorAll('[data-sell]').forEach(b=>b.onclick=()=>{const l=p.lots.find(x=>x.id===b.dataset.sell);if(l)sellForm(p,l);});
   modalBox.querySelectorAll('[data-lotdel]').forEach(b=>b.onclick=()=>{if(confirm('Xoá lô này?')){armUndo();p.lots=p.lots.filter(x=>x.id!==b.dataset.lotdel);save();openProduct(id);renderAll();toastUndo('Đã xoá lô hàng.');}});
@@ -700,6 +707,25 @@ function lotForm(p){
     const last=p.priceHistory[p.priceHistory.length-1];
     if(price>0&&(!last||last.kind!=='Giá nhập'||last.price!==price))p.priceHistory.push({date:todayISO(),kind:'Giá nhập',price});
     save();renderAll();toast('Đã nhập lô.');openProduct(p.id);};
+}
+/* v3.2.0 (khách yêu cầu): sửa trực tiếp 1 lô — ngày nhập, số lượng còn,
+   GIÁ NHẬP, hạn dùng. Trước đây gõ sai giá nhập là phải xoá lô tạo lại. */
+function lotEditForm(p,l){
+  openModal('<h2>✏️ Sửa lô — '+esc(p.name)+'</h2><form id="fLotE">'+
+    field('Ngày nhập','<input id="leDate" type="date" value="'+esc(l.date||'')+'">')+
+    '<div class="grid2">'+field('Số lượng còn *','<input id="leQty" type="number" min="0" step="any" required value="'+esc(l.qty)+'">')+
+    field('Giá nhập (theo '+esc(p.unit||'đơn vị')+')','<input id="lePrice" class="mn" inputmode="numeric" value="'+(l.importPrice||'')+'">')+'</div>'+
+    field('Hạn sử dụng của lô này','<input id="leExpiry" type="date" value="'+esc(l.expiry||'')+'">')+
+    '<div class="actions"><button class="btn btn-primary" type="submit">Lưu thay đổi</button></div></form>');
+  document.getElementById('fLotE').onsubmit=e=>{e.preventDefault();
+    const price=num(document.getElementById('lePrice').value);
+    l.date=document.getElementById('leDate').value||l.date;
+    l.qty=num(document.getElementById('leQty').value);
+    if(price>0&&price!==(Number(l.importPrice)||0)){const last=p.priceHistory[p.priceHistory.length-1];
+      if(!last||last.kind!=='Giá nhập'||last.price!==price)p.priceHistory.push({date:todayISO(),kind:'Giá nhập',price});}
+    l.importPrice=price;
+    l.expiry=document.getElementById('leExpiry').value||null;
+    save();renderAll();toast('Đã sửa lô hàng.');openProduct(p.id);};
 }
 /* v2.5.5: bớt số lượng của 1 lô theo số tự nhập (trước đây mỗi lần bấm chỉ
    trừ đúng 1 — muốn trừ nhiều phải bấm nhiều lần, Cruz góp ý 2026-11-10). */
@@ -1046,15 +1072,27 @@ function customerForm(c){
 }
 document.getElementById('btnAddCustomer').onclick=()=>customerForm(null);
 
-function openCustomer(id){
+let _custPayAll=false;
+function openCustomer(id,keepPay){
   const c=customer(id);if(!c)return;
+  if(!keepPay)_custPayAll=false;
   const debts=DB.debts.filter(d=>d.customerId===id).slice().sort((a,b)=>String(b.datetime).localeCompare(String(a.datetime)));
+  /* v3.2.0 (khách yêu cầu): gộp MỌI lần trả của khách thành 1 danh sách —
+     trả bao nhiêu, ngày nào, vào khoản nợ nào — khách hỏi là tra được ngay,
+     khỏi mở từng khoản nợ ra xem (trước đây chỉ hiện rải trong từng khoản). */
+  const allPays=debts.flatMap(d=>(d.payments||[]).map(pay=>({pay:pay,d:d})))
+    .sort((a,b)=>String(b.pay.date).localeCompare(String(a.pay.date))||String(b.d.datetime).localeCompare(String(a.d.datetime)));
+  const totPaid=allPays.reduce((s,x)=>s+(Number(x.pay.amount)||0),0);
+  const payRows=_custPayAll?allPays:allPays.slice(0,15);
   openModal('<h2>'+esc(c.name)+'</h2>'+
     '<div class="kv"><span>Thôn</span><b>'+esc((village(c.villageId)||{}).name||'—')+'</b></div>'+
     '<div class="kv"><span>Điện thoại</span><b>'+esc(c.phone||'—')+'</b></div>'+
     (c.note?'<div class="kv"><span>Nhận diện</span><b>'+esc(c.note)+'</b></div>':'')+
     '<div class="kv"><span>Tổng còn nợ</span><b class="money red">'+fmtMoney(customerDebtTotal(id))+'</b></div>'+
     '<div class="actions"><button class="btn btn-primary" id="btnDebt">＋ Ghi khoản nợ mới</button>'+(customerDebtTotal(id)>0?'<button class="btn" id="btnPayTotal">💰 Trả nợ</button><button class="btn" id="btnRemind">📋 Nhắc nợ</button>':'')+'<button class="btn" id="btnEditC">✏️ Sửa hồ sơ</button></div>'+
+    (allPays.length?'<h3 class="sec-title">🧾 Lịch sử đã trả ('+allPays.length+' lần) — tổng '+fmtMoney(totPaid)+'</h3>'+
+      payRows.map(x=>'<div class="kv"><span>'+fmtDate(x.pay.date)+' · vào khoản nợ '+fmtDate(x.d.datetime)+(x.d.note?' — '+esc(x.d.note):'')+(x.pay.method?' · '+esc(x.pay.method):'')+(x.pay.person?' · '+esc(x.pay.person):'')+'</span><b>'+fmtMoney(x.pay.amount)+'</b></div>').join('')+
+      (allPays.length>15?'<div class="actions"><button class="btn btn-small" id="btnPayMore">'+(_custPayAll?'Thu gọn':'Xem tất cả '+allPays.length+' lần trả')+'</button></div>':''):'')+
     '<h3 class="sec-title">Các khoản nợ ('+debts.length+')</h3>'+
     (debts.length?debts.map(d=>{const rem=debtRemain(d);
       return '<div class="sub-block"><div class="head"><b>'+fmtDT(d.datetime)+'</b><span class="money '+(rem>0?'red':'')+'">'+(rem>0?'Còn '+fmtMoney(rem):'Đã trả hết ✓')+'</span></div>'+
@@ -1076,6 +1114,8 @@ function openCustomer(id){
     if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(msg).then(done).catch(()=>{prompt('Sao chép tin nhắc nợ:',msg);});
     else prompt('Sao chép tin nhắc nợ:',msg);};
   document.getElementById('btnDebt').onclick=()=>debtForm(c);
+  const btnPM=document.getElementById('btnPayMore');
+  if(btnPM)btnPM.onclick=()=>{_custPayAll=!_custPayAll;openCustomer(id,true);};
   const btnPT=document.getElementById('btnPayTotal');
   if(btnPT)btnPT.onclick=()=>payCustomerForm(c,()=>openCustomer(id));
   modalBox.querySelectorAll('[data-pay]').forEach(b=>b.onclick=()=>payDebtForm(DB.debts.find(d=>d.id===b.dataset.pay),()=>openCustomer(id)));
@@ -1202,32 +1242,65 @@ function openSupplier(id){
       '<div class="sub" style="color:var(--muted);font-size:13px">Tổng: '+fmtMoney(i.total)+' · Đã thanh toán: '+fmtMoney(invPaid(i))+(i.note?' · '+esc(i.note):'')+'</div>'+
       (i.image?'<img class="thumb-media" loading="lazy" decoding="async" data-full src="'+i.image+'" alt="Ảnh hoá đơn" title="Bấm để xem ảnh lớn">':'')+
       mediaThumbsHTML(i.media)+
-      (i.payments&&i.payments.length?'<div style="margin-top:6px">'+payHistoryHtml(i)+'</div>':'')+
+      (i.payments&&i.payments.length?'<div style="margin-top:6px">'+payHistoryHtml(i,true)+'</div>':'')+
       '<div class="actions">'+(rem>0?'<button class="btn btn-small btn-primary" data-invpay="'+i.id+'">Thanh toán</button>':'')+
+      '<button class="btn btn-small" data-invedit="'+i.id+'">✏️ Sửa hoá đơn</button>'+
       '<button class="btn btn-small btn-danger" data-invdel="'+i.id+'">Xoá hoá đơn</button></div></div>';}).join('')
       :'<div class="empty">Chưa có hoá đơn nào của nhà cung cấp này.</div>'));
   document.getElementById('btnEditS').onclick=()=>supplierForm(s);
   document.getElementById('btnInv').onclick=()=>invoiceForm(s);
   modalBox.querySelectorAll('[data-invpay]').forEach(b=>b.onclick=()=>payInvoiceForm(DB.invoices.find(i=>i.id===b.dataset.invpay),()=>openSupplier(id)));
+  modalBox.querySelectorAll('[data-invedit]').forEach(b=>b.onclick=()=>{const inv=DB.invoices.find(i=>i.id===b.dataset.invedit);if(inv)invoiceForm(s,inv);});
+  modalBox.querySelectorAll('[data-payedit]').forEach(b=>b.onclick=()=>{const inv=DB.invoices.find(i=>i.id===b.dataset.invid);const pay=inv&&(inv.payments||[]).find(p=>p.id===b.dataset.payedit);if(inv&&pay)payInvoiceEditForm(inv,pay);});
   modalBox.querySelectorAll('[data-invdel]').forEach(b=>b.onclick=()=>{if(confirm('Xoá hoá đơn này? Các khoản chi tự động kèm theo cũng bị xoá.')){
     const inv=DB.invoices.find(x=>x.id===b.dataset.invdel);
     (inv.payments||[]).forEach(p=>{DB.cash=DB.cash.filter(x=>!(x.source==='supplierPayment'&&x.sourceRef===p.id));});
     armUndo();DB.invoices=DB.invoices.filter(x=>x.id!==inv.id);save();openSupplier(id);renderAll();toastUndo('Đã xoá hoá đơn.');}});
 }
-function invoiceForm(s){
-  openModal('<h2>Thêm hoá đơn — '+esc(s.name)+'</h2><form id="fInv">'+
-    field('Ngày nhập','<input id="iDate" type="date" value="'+todayISO()+'">')+
+/* v3.2.0: invoiceForm dùng chung cho THÊM và SỬA hoá đơn (khách yêu cầu —
+   trước đây muốn thêm ảnh / sửa ngày là phải xoá hoá đơn tạo lại). */
+function invoiceForm(s,inv){
+  const initMedia=inv?((inv.media||[]).slice().concat(inv.image?[{kind:'image',url:inv.image,path:storagePathFromUrl(inv.image)||'',name:'Ảnh hoá đơn'}]:[])):[];
+  openModal('<h2>'+(inv?'✏️ Sửa hoá đơn':'Thêm hoá đơn')+' — '+esc(s.name)+'</h2><form id="fInv">'+
+    field('Ngày nhập','<input id="iDate" type="date" value="'+(inv?esc(inv.date||''):todayISO())+'">')+
     field('Ảnh / video hoá đơn (chọn được nhiều)',mediaPickerHTML())+
-    field('Tổng tiền hoá đơn *','<input id="iTotal" class="mn" inputmode="numeric" required>')+
-    field('Ghi chú','<input id="iNote" placeholder="VD: 10 thùng nước ngọt, 5 bao gạo">')+
-    '<div class="actions"><button class="btn btn-primary" type="submit">Lưu hoá đơn</button></div></form>');
-  const iPicker=document.querySelector('#fInv .media-picker');initMediaPicker(iPicker,[]);
+    field('Tổng tiền hoá đơn *','<input id="iTotal" class="mn" inputmode="numeric" required value="'+(inv?(inv.total||''):'')+'">')+
+    field('Ghi chú','<input id="iNote" placeholder="VD: 10 thùng nước ngọt, 5 bao gạo" value="'+(inv?esc(inv.note||''):'')+'">')+
+    '<div class="actions"><button class="btn btn-primary" type="submit">'+(inv?'Lưu thay đổi':'Lưu hoá đơn')+'</button></div></form>');
+  const iPicker=document.querySelector('#fInv .media-picker');initMediaPicker(iPicker,initMedia);
   document.getElementById('fInv').onsubmit=async e=>{e.preventDefault();
+    const total=num(document.getElementById('iTotal').value);
+    if(inv&&total<invPaid(inv)){alert('Tổng hoá đơn ('+fmtMoney(total)+') đang nhỏ hơn số đã thanh toán ('+fmtMoney(invPaid(inv))+') — không sửa xuống thấp hơn số đã trả được.');return;}
     let media;try{media=await collectMedia(iPicker,e.target.querySelector('[type=submit]'));}catch(err){toast('⚠️ '+(err.message||'Tải tệp lên thất bại.'));return;}
+    if(inv){Object.assign(inv,{date:document.getElementById('iDate').value,total:total,
+      note:document.getElementById('iNote').value.trim(),media:media,image:''});
+      save();renderAll();toast('Đã sửa hoá đơn.');openSupplier(s.id);return;}
     DB.invoices.push({id:uid(),supplierId:s.id,date:document.getElementById('iDate').value,
-      total:num(document.getElementById('iTotal').value),image:'',media:media,
+      total:total,image:'',media:media,
       note:document.getElementById('iNote').value.trim(),payments:[]});
     save();renderAll();toast('Đã lưu hoá đơn.');openSupplier(s.id);};
+}
+/* v3.2.0: sửa 1 lần thanh toán NCC (ngày / số tiền / phương thức) — khoản
+   chi tự động trong Thu chi được cập nhật đúng theo lần thanh toán đó. */
+function payInvoiceEditForm(inv,pay){
+  openModal('<h2>✏️ Sửa lần thanh toán</h2>'+
+    '<div class="kv"><span>Hoá đơn</span><b>Ngày '+fmtDate(inv.date)+' · '+esc((supplier(inv.supplierId)||{}).name||'')+'</b></div><form id="fPayIE">'+
+    field('Ngày thanh toán','<input id="peDate" type="date" value="'+esc(pay.date||'')+'">')+
+    field('Số tiền thanh toán *','<input id="peAmt" class="mn" inputmode="numeric" required value="'+(pay.amount||'')+'">')+
+    field('Phương thức','<select id="peMethod">'+['Tiền mặt','Chuyển khoản','Khác'].map(m=>'<option'+(pay.method===m?' selected':'')+'>'+m+'</option>').join('')+'</select>')+
+    field('Người thực hiện (ai trả tiền)','<input id="pePerson" value="'+esc(pay.person||'')+'">')+
+    '<p style="color:var(--muted);font-size:13px">Khoản chi tương ứng trong mục Thu chi sẽ được sửa theo.</p>'+
+    '<div class="actions"><button class="btn btn-primary" type="submit">Lưu thay đổi</button></div></form>');
+  document.getElementById('fPayIE').onsubmit=e=>{e.preventDefault();
+    const amt=num(document.getElementById('peAmt').value);
+    if(!(amt>0)){alert('Số tiền phải lớn hơn 0.');return;}
+    if(invPaid(inv)-(Number(pay.amount)||0)+amt>(Number(inv.total)||0)){alert('Cộng dồn sẽ vượt tổng hoá đơn '+fmtMoney(inv.total)+' — hãy sửa tổng hoá đơn trước nếu cần.');return;}
+    const nd=document.getElementById('peDate').value||pay.date;
+    const nperson=document.getElementById('pePerson').value.trim();
+    const ce=DB.cash.find(x=>x.source==='supplierPayment'&&x.sourceRef===pay.id);
+    if(ce){ce.amount=amt;ce.datetime=nd+'T'+(String(ce.datetime).slice(11)||nowLocal().slice(11));ce.person=nperson;}
+    pay.date=nd;pay.amount=amt;pay.method=document.getElementById('peMethod').value;pay.person=nperson;
+    save();renderAll();toast('Đã sửa lần thanh toán — Thu chi đã cập nhật theo.');openSupplier(inv.supplierId);};
 }
 function payInvoiceForm(inv,back){
   if(!inv)return;
@@ -1730,7 +1803,7 @@ document.getElementById('qExcel').addEventListener('click',exportExcel);
    nhiều file + video 100MB (vướng giới hạn đồng bộ), nút Bán hàng +
    doanh thu/lợi nhuận, AI (giọng nói/hình ảnh/chat). */
 const FB_CONFIG={apiKey:"AIzaSyDFHbNzQtuOJEKKOxvww_2S6U_nhuvnICU",authDomain:"cuahangtuyen.vercel.app",projectId:"quanlycuahang-1aa8a",storageBucket:"quanlycuahang-1aa8a.firebasestorage.app",messagingSenderId:"61934531773",appId:"1:61934531773:web:bf7fbaf53d84d8188773d4"};
-const APP_VER='v3.1.7';
+const APP_VER='v3.2.0';
 const SYNC_KEY='qlch_sync';
 let _sync={uid:'',email:'',storeId:'',isOwner:false,ownerEmail:'',memberEmails:[],updatedAt:0,lastSyncAt:0,stateFor:''};
 try{const _s=JSON.parse(localStorage.getItem(SYNC_KEY)||'null');if(_s&&typeof _s==='object')_sync=Object.assign(_sync,_s);}catch(e){}

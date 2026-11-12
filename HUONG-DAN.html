@@ -15,7 +15,7 @@ b.k{color:#0b6e5f}
 .foot{margin-top:22px;color:#4a5a63;font-size:11.5px;border-top:1px solid #cfe0dc;padding-top:8px}
 </style></head><body>
 <h1>HƯỚNG DẪN SỬ DỤNG — APP QUẢN LÝ CỬA HÀNG</h1>
-<div class="meta">Dành cho người dùng app tại cửa hàng · Link app: <b>cuahangtuyen.vercel.app</b> · Phiên bản app v2.6.0</div>
+<div class="meta">Dành cho người dùng app tại cửa hàng · Link app: <b>cuahangtuyen.vercel.app</b> · Phiên bản app v3.2.0</div>
 
 <h2>1. Mở app và lần đầu sử dụng</h2>
 <ul>
@@ -36,6 +36,7 @@ b.k{color:#0b6e5f}
 <ul>
 <li>Bấm <b>＋ Thêm sản phẩm</b>: chụp/tải ảnh, điền tên, giá bán tham khảo, ngưỡng cảnh báo tồn kho, số ngày cảnh báo hết hạn. Mã sản phẩm để trống thì app tự sinh. <b>Mã vạch</b>: mỗi loại sản phẩm có đúng 1 mã vạch của nhà sản xuất — cạnh ô Barcode trong form có nút <b>Quét</b>, bấm để quét bằng camera và điền mã luôn (khỏi gõ 13 số). Máy nào không có sẵn bộ quét của trình duyệt (như iPhone) thì app tự dùng bộ quét kèm theo: quét trực tiếp qua camera, nếu camera trực tiếp không mở được thì app chuyển sang <b>chụp ảnh mã vạch</b> để đọc — chụp gần, rõ và đủ sáng là đọc được. Nếu mã quét được <b>đã có trong kho</b>, app sẽ báo và hỏi mở sản phẩm cũ (để nhập thêm hàng) thay vì tạo trùng. Với hàng mới, app còn thử <b>điền sẵn tên gợi ý</b> từ mã vạch (hàng nhập khẩu thường tra được, hàng trong nước có thể chưa có — lúc đó tự điền tên; giá bán luôn tự nhập).</li>
 <li><b>Nhập hàng:</b> ngay khi thêm sản phẩm mới, form có sẵn mục <b>“Lô nhập đầu tiên”</b> — điền luôn số lượng, giá nhập, ngày nhập và hạn dùng là app nhập lô luôn một lượt. Các lần nhập sau: mở chi tiết sản phẩm → <b>＋ Nhập thêm lô</b>. Mỗi lần nhập là một lô riêng, có ngày nhập, số lượng, giá nhập và hạn dùng riêng. Tồn kho của sản phẩm là tổng các lô cộng lại.</li>
+<li><b>Sửa giá nhập:</b> mỗi lô có một giá nhập riêng. Trong form <b>✏️ Sửa sản phẩm</b> có sẵn ô <b>“Giá nhập — của lô gần nhất”</b> để sửa nhanh giá của lần nhập mới nhất. Muốn sửa lô khác: mở chi tiết sản phẩm, bấm <b>✏️ Sửa lô</b> ngay ở lô đó — sửa được ngày nhập, số lượng, giá nhập và hạn dùng, không phải xoá lô tạo lại.</li>
 <li><b>Nhóm hàng và Đơn vị:</b> trong form sản phẩm, cuối danh sách có mục <b>“＋ Thêm nhóm mới…”</b> và <b>“＋ Thêm đơn vị mới…”</b> để tự thêm theo hàng của cửa hàng. Muốn đổi tên/xoá nhóm hoặc đơn vị: bấm nút <b>🏷 Nhóm &amp; đơn vị</b> ở trang Sản phẩm (mục nào đang có sản phẩm dùng thì không xoá được).</li>
 <li><b>Tìm hàng:</b> gõ tên, mã hoặc barcode vào ô tìm kiếm — gõ không dấu cũng được (ví dụ gõ “coc” vẫn ra Coca). Có thể sắp xếp theo tên, theo hàng sắp hết hạn, hàng tồn ít, hoặc lọc riêng hàng “Có cảnh báo”.</li>
 <li>Ngừng bán một mặt hàng: mở sản phẩm → Sửa → đổi Trạng thái thành <b>Ngừng kinh doanh</b>.</li>
@@ -47,6 +48,7 @@ b.k{color:#0b6e5f}
 <li>Bấm <b>＋ Thêm khách</b>: họ tên, thôn, số điện thoại, ghi chú nhận diện (ví dụ “nhà gần đình”). Ngay trong form này có mục <b>“Khoản nợ đầu tiên”</b>: khách mua nợ ngay thì điền luôn tiền nợ, nợ gì và ảnh bằng chứng — app ghi nợ luôn một lượt, khỏi phải mở hồ sơ ghi riêng.</li>
 <li><b>Ghi nợ:</b> mở hồ sơ khách → <b>＋ Ghi khoản nợ mới</b>: ngày giờ, ghi chú nợ gì, tổng tiền, chụp ảnh/video bằng chứng nếu có. Một khách có thể có nhiều khoản nợ cùng lúc.</li>
 <li><b>Khách trả tiền:</b> bấm nút <b>Trả nợ</b> ngay trong danh sách (hoặc mở khoản nợ rồi bấm Ghi trả nợ): nhập số tiền trả (trả một phần cũng được), phương thức, người thu tiền. Tiền trả <b>tự chạy sang mục Thu chi</b> thành một khoản thu — không phải nhập lại, không bị ghi trùng. Số còn lại của khoản nợ tự cập nhật, lịch sử trả được giữ nguyên kể cả khi đã trả hết.</li>
+<li><b>Xem khách đã trả bao nhiêu:</b> mở hồ sơ khách — mục <b>🧾 Lịch sử đã trả</b> gộp tất cả các lần khách đã trả của mọi khoản nợ: trả bao nhiêu, ngày nào, vào khoản nợ nào, kèm tổng số đã trả. Khách hỏi lại là mở ra tra được ngay, không phải mở từng khoản nợ.</li>
 <li><b>Nhắc nợ:</b> trong hồ sơ khách có nút <b>📋 Nhắc nợ</b> — app soạn sẵn tin nhắn liệt kê từng khoản còn nợ, bấm là sao chép xong, dán vào Zalo hoặc SMS để gửi.</li>
 <li>Nút <b>📞 Gọi</b> trong danh sách bấm là gọi ngay cho khách. Có nút lọc <b>“Chỉ khách đang nợ”</b> để xem riêng khách còn nợ; khách nợ nhiều tự xếp lên trước trong thôn.</li>
 </ul>
@@ -56,6 +58,7 @@ b.k{color:#0b6e5f}
 <li>Bấm <b>＋ Thêm nhà cung cấp</b>: tên, số điện thoại, địa chỉ, ghi chú.</li>
 <li>Mở nhà cung cấp → <b>＋ Thêm hoá đơn nhập</b>: ngày nhập, chụp ảnh hoá đơn, tổng tiền, ghi chú.</li>
 <li><b>Trả tiền nhà cung cấp:</b> bấm <b>Thanh toán</b> trong hoá đơn, nhập số tiền (trả nhiều lần được). Tiền <b>tự chạy sang mục Thu chi</b> thành một khoản chi. Số còn nợ của từng hoá đơn tự cập nhật.</li>
+<li><b>Sửa hoá đơn / sửa lần thanh toán:</b> mỗi hoá đơn có nút <b>✏️ Sửa hoá đơn</b> — sửa ngày nhập, tổng tiền, ghi chú hoặc thêm ảnh, không phải xoá đi tạo lại. Từng lần thanh toán cũng có nút <b>✏️ Sửa</b> riêng để sửa ngày hoặc số tiền; khoản chi tương ứng trong mục Thu chi sẽ tự sửa theo.</li>
 </ul>
 
 <h2>6. Thu chi</h2>
